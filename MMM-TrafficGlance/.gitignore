@@ -1,0 +1,13 @@
+# Runtime
+node_modules/
+traffic.db
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

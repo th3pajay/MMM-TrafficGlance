@@ -1,0 +1,86 @@
+{
+    module: "MMM-TrafficGlance",
+    position: "bottom_center",
+    header: "Traffic Intelligence",
+    config: {
+        apiKey: "YOUR_TOMTOM_API_KEY_HERE",
+        updateInterval: 300000,
+        maxWidth: "350px",
+
+        // Map display
+        mapWidth: "100%",
+        mapHeight: "220px",
+        mapZoom: null,              // null = auto-fit to routes
+        mapCenter: null,            // null = auto-fit; or [lat, lon]
+        showMapScale: true,
+        mapPadding: [20, 20],       // [vertical, horizontal] px when auto-fitting
+
+        // TomTom routing API
+        api: {
+            timeout: 10000,         // request timeout (ms)
+            routeType: "fastest",   // "fastest" | "shortest" | "eco" | "thrilling"
+            travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
+            traffic: true,          // use live traffic in routing
+            avoidTolls: false,
+            avoidHighways: false
+        },
+
+        // Alert threshold
+        thresholds: {
+            critical: 1.25          // delay factor for red alert (1.25 = 25% above free-flow)
+        },
+
+        // Database / history
+        database: {
+            retentionDays: 90,      // how many days of history to keep
+            cleanupOnStart: true    // purge old records on module start
+        },
+
+        // Query timeouts (ms) — increase on slow Raspberry Pi hardware
+        queryTimeouts: {
+            historical: 10000,
+            sparkline: 12000
+        },
+
+        // Sparkline charts
+        sparkline: {
+            enabled: true,
+            width: 160,             // canvas width (px)
+            height: 40,             // canvas height (px)
+            xAxisMode: "frequency", // "frequency" (raw measurements) | "time" (clock-aligned)
+            maxDataPoints: 50,      // max points rendered when xAxisMode="frequency"
+            lookbackHours: 48,      // data window; auto-set to 720 in monthly view
+            showBaseline: true,     // draw historical average line
+            showBaselineLabel: true,// show "Avg: 34m" label on baseline
+            showNowIndicator: true, // dot marking the latest measurement
+            showNowLabel: true,     // "Now" text next to the dot
+            showGrid: true,         // horizontal grid lines
+            gridTicks: 4,           // number of horizontal grid divisions
+            showYLabels: true,      // Y-axis value labels (e.g. "40m")
+            useZScoreColors: true,  // per-segment coloring based on Z-score deviation
+            showLegend: true,       // inline legend below sparkline
+            colors: {
+                critical: "#e91e63",
+                warning: "#f39c12",
+                good: "#2ecc71",
+                neutral: "#4fc3f7",
+                baseline: "#888888"
+            }
+        },
+
+        routes: [
+            {
+                id: "morning-commute",
+                name: "Work",
+                origin: "47.5148,19.0777",
+                destination: "47.2309,18.6081"
+            },
+            {
+               id: "evening-route",
+               name: "Home",
+               origin: "47.2309,18.6081",
+               destination: "47.5148,19.0777"
+           }
+        ]
+    }
+}

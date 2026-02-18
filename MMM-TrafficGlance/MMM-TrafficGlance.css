@@ -1,0 +1,320 @@
+/* MMM-TrafficGlance Styles */
+
+/* Design Tokens */
+:root {
+    /* Colors - Traffic Status */
+    --traffic-good: #2ecc71;
+    --traffic-warning: #f39c12;
+    --traffic-critical: #c0392b;
+    --traffic-critical-alt: #e91e63;
+    --traffic-neutral: #4fc3f7;
+
+    /* Colors - Baseline */
+    --color-baseline: #888888;
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #aaaaaa;
+    --color-background-dark: #1a1a2e;
+
+    /* Spacing Scale (4px base unit) */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+
+    /* Typography */
+    --font-size-xs: 8px;
+    --font-size-sm: 10px;
+    --font-size-base: 14px;
+    --font-size-lg: 18px;
+    --font-size-xl: 24px;
+
+    /* Borders & Radius */
+    --border-radius-sm: 4px;
+    --border-radius-md: 6px;
+    --border-color: rgba(255, 255, 255, 0.1);
+
+    /* Transitions */
+    --transition-fast: 150ms ease-in-out;
+    --transition-medium: 300ms ease-in-out;
+    --transition-slow: 500ms ease-in-out;
+
+    /* Opacity */
+    --opacity-dim: 0.7;
+    --opacity-disabled: 0.5;
+    --opacity-faint: 0.15;
+}
+
+/* Override MagicMirror region constraints */
+.MMM-TrafficGlance {
+    min-width: 400px !important;
+    max-width: none !important;
+}
+
+.traffic-root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--color-text-primary);
+    min-width: 400px;
+    width: 100%;
+}
+
+.loading {
+    text-align: center;
+    padding: var(--spacing-lg);
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+}
+
+.traffic-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8px;
+}
+
+.name-cell {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+}
+
+.time-cell {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: right;
+    font-weight: bold;
+    transition: color var(--transition-medium);
+}
+
+.time-cell.rose {
+    color: var(--traffic-critical-alt);
+}
+
+.time-cell.green {
+    color: var(--traffic-good);
+}
+
+.time-cell.yellow {
+    color: var(--traffic-warning);
+}
+
+.time-cell.red {
+    color: var(--traffic-critical);
+}
+
+.big-num {
+    font-size: var(--font-size-xl);
+    margin-right: var(--spacing-xs);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+.unit {
+    font-size: var(--font-size-sm);
+    opacity: var(--opacity-dim);
+}
+
+#traffic-map-container {
+    width: 100% !important;
+    min-width: 280px;
+    border-radius: var(--border-radius-sm);
+    overflow: hidden;
+    min-height: 180px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+#traffic-map-container .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+    background: var(--color-background-dark);
+}
+
+.config-error {
+    color: var(--traffic-critical-alt);
+    padding: var(--spacing-md);
+    border: 1px solid var(--traffic-critical-alt);
+    border-radius: var(--border-radius-sm);
+    background: rgba(233, 30, 99, 0.1);
+}
+
+.config-error ul {
+    margin: var(--spacing-sm) 0 0 0;
+    padding-left: var(--spacing-xl);
+}
+
+.api-warning {
+    color: var(--traffic-warning);
+    padding: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    background: rgba(255, 152, 0, 0.1);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+/* New layout for sparklines and trends */
+.route-container {
+    width: 100%;
+}
+
+.route-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    padding-left: var(--spacing-sm);
+    padding-right: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+    border-radius: var(--border-radius-sm);
+    transition: background var(--transition-fast);
+    animation: fadeIn var(--transition-medium);
+}
+
+.route-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.route-row:last-child {
+    border-bottom: none;
+}
+
+.route-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.route-name {
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.route-metrics {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.sparkline-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.sparkline-canvas {
+    /* width and height controlled by JavaScript config */
+    opacity: 0.9;
+    transition: opacity var(--transition-fast);
+}
+
+/* Sparkline legend */
+.sparkline-legend {
+    display: flex;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+    opacity: var(--opacity-dim);
+    margin-top: 2px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.legend-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-item.good {
+    color: var(--traffic-good);
+}
+
+.legend-item.good .legend-dot {
+    background-color: var(--traffic-good);
+}
+
+.legend-item.warning {
+    color: var(--traffic-warning);
+}
+
+.legend-item.warning .legend-dot {
+    background-color: var(--traffic-warning);
+}
+
+.legend-item.critical {
+    color: var(--traffic-critical-alt);
+}
+
+.legend-item.critical .legend-dot {
+    background-color: var(--traffic-critical-alt);
+}
+
+.trend-arrow {
+    font-size: var(--font-size-lg);
+    line-height: 1;
+    font-weight: bold;
+    transition: color var(--transition-medium);
+}
+
+.trend-arrow.up {
+    color: var(--traffic-critical-alt);
+}
+
+.trend-arrow.down {
+    color: var(--traffic-good);
+}
+
+.trend-arrow.stable {
+    color: var(--color-baseline);
+}
+
+.route-time {
+    grid-column: 1 / -1;
+    transition: color var(--transition-medium);
+}
+
+.route-time.green {
+    color: var(--traffic-good);  /* Green - normal, 0% or below historical average */
+}
+
+.route-time.yellow {
+    color: var(--traffic-warning);  /* Orange/Yellow - caution, 1-25% above historical */
+}
+
+.route-time.red {
+    color: var(--traffic-critical);  /* Red - significant delay, above 25% historical */
+}
+
+.route-time.rose {
+    color: var(--traffic-critical);  /* Alias for red for backwards compatibility */
+}
+
+/* Quota warning banner */
+.quota-warning {
+    background-color: rgba(255, 152, 0, 0.2);
+    border-left: 3px solid var(--traffic-warning);
+    padding: var(--spacing-sm) var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    border-radius: var(--border-radius-sm);
+}
+
+.quota-warning small {
+    font-size: var(--font-size-sm);
+    opacity: 0.8;
+    display: block;
+    margin-top: var(--spacing-xs);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
