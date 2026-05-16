@@ -2,6 +2,8 @@ const NodeHelper = require("node_helper");
 const axios = require("axios");
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const ErrorHandler = require("./shared/ErrorHandler");
+const StatsUtil = require("./shared/StatsUtil");
 
 module.exports = NodeHelper.create({
     intervalId: null,
@@ -12,31 +14,12 @@ module.exports = NodeHelper.create({
         this.quotaState = {
             nonTileQuotaExhausted: false,
             lastQuotaHitTime: null,
-            nextMidnightUTC: null,
-            consecutiveFailures: 0
+            nextMidnightUTC: null
         };
-        // Caching infrastructure
-        this.responseCache = new Map();
-        this.cacheTTL = 60000; // 1 minute cache for API responses
+        this.errorHandler = new ErrorHandler();
         this.sparklineCache = new Map();
         this.polylineCache = new Map();
-    },
-
-    sanitizeError: function(error) {
-        if (!error.response) return error.message;
-        return `HTTP ${error.response.status} ${error.response.statusText}`;
-    },
-
-    isQuotaError: function(error) {
-        if (!error.response) return false;
-        const status = error.response.status;
-        const data = error.response.data;
-        if (status === 403) return true;
-        if (data && typeof data === 'object') {
-            const message = JSON.stringify(data).toLowerCase();
-            return message.includes('quota') || message.includes('rate limit') || message.includes('too many requests');
-        }
-        return false;
+        this._fetchInProgress = false;
     },
 
     handleQuotaExhaustion: function() {
@@ -46,7 +29,7 @@ module.exports = NodeHelper.create({
         const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
         this.quotaState.nextMidnightUTC = midnight.getTime();
         console.warn(`[TrafficGlance] Quota exceeded. Resuming at: ${midnight.toISOString()}`);
-        this.sendSocketNotification("QUOTA_EXHAUSTED", { nextResetTime: midnight.toISOString(), useTomTomTiles: true });
+        this.sendSocketNotification("QUOTA_EXHAUSTED", { nextResetTime: midnight.getTime(), useTomTomTiles: true });
         this.startMidnightMonitor();
     },
 
@@ -56,6 +39,7 @@ module.exports = NodeHelper.create({
             if (this.quotaState.nonTileQuotaExhausted && Date.now() >= this.quotaState.nextMidnightUTC) {
                 this.quotaState.nonTileQuotaExhausted = false;
                 this.stopMidnightMonitor();
+                this.sendSocketNotification("QUOTA_RESTORED", {});
                 this.updateTraffic();
             }
         }, 60000);
@@ -78,7 +62,7 @@ module.exports = NodeHelper.create({
                 this.db.run('PRAGMA temp_store=MEMORY');
                 this.db.run('PRAGMA busy_timeout=5000');
                 this.db.run(`CREATE TABLE IF NOT EXISTS traffic_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER PRIMARY KEY,
                     route_id TEXT NOT NULL,
                     profile TEXT DEFAULT 'default',
                     travel_time INTEGER NOT NULL,
@@ -169,7 +153,7 @@ module.exports = NodeHelper.create({
             this.db.all(sql, [now, intervalSeconds, routeId, cutoff], (err, rows) => {
                 if (err) {
                     console.error('[TrafficGlance] Sparkline query error:', err.message);
-                    return resolve({ points: [], baseline: null, stdDev: null, stats: null });
+                    return resolve({ points: [], baseline: null, stdDev: null, stats: null, sparklineError: true });
                 }
 
                 const intervalMap = new Map((rows || []).map(r => [r.intervals_ago, r.avg_time]));
@@ -185,31 +169,13 @@ module.exports = NodeHelper.create({
                 }
 
                 const values = points.map(p => p.value).filter(v => v !== null);
-                const baseline = values.length > 0
-                    ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
-                    : null;
+                const baseline = values.length > 0 ? Math.round(StatsUtil.calculateMean(values)) : null;
 
-                // Calculate standard deviation and Z-scores
                 let stdDev = null;
                 let stats = null;
                 if (values.length > 1 && baseline !== null) {
-                    const variance = values.reduce((sum, v) => sum + Math.pow(v - baseline, 2), 0) / values.length;
-                    stdDev = Math.sqrt(variance);
-
-                    // Calculate Z-scores for each point
-                    points.forEach(p => {
-                        if (p.value !== null && stdDev > 0) {
-                            p.zScore = (p.value - baseline) / stdDev;
-                        } else {
-                            p.zScore = 0;
-                        }
-                    });
-
-                    stats = {
-                        min: Math.min(...values),
-                        max: Math.max(...values),
-                        count: values.length
-                    };
+                    stdDev = StatsUtil.assignZScoresToPoints(points, baseline);
+                    stats = { min: Math.min(...values), max: Math.max(...values), count: values.length };
                 }
 
                 const result = { points, baseline, stdDev, stats };
@@ -250,44 +216,20 @@ module.exports = NodeHelper.create({
             this.db.all(sql, [routeId, cutoff, maxPoints], (err, rows) => {
                 if (err) {
                     console.error('[TrafficGlance] Sparkline raw query error:', err.message);
-                    return resolve({ points: [], baseline: null, stdDev: null, stats: null });
+                    return resolve({ points: [], baseline: null, stdDev: null, stats: null, sparklineError: true });
                 }
 
                 if (!rows || rows.length === 0) {
                     return resolve({ points: [], baseline: null, stdDev: null, stats: null });
                 }
 
-                // Reverse to chronological order (oldest first)
                 const sortedRows = rows.reverse();
-
-                // Convert to minutes
                 const values = sortedRows.map(r => Math.round(r.travel_time / 60));
-
-                // Calculate baseline (mean)
-                const baseline = values.length > 0
-                    ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+                const baseline = values.length > 0 ? Math.round(StatsUtil.calculateMean(values)) : null;
+                const points = sortedRows.map((row, i) => ({ timestamp: row.timestamp, value: values[i], zScore: 0 }));
+                const stdDev = values.length > 1 && baseline !== null
+                    ? StatsUtil.assignZScoresToPoints(points, baseline)
                     : null;
-
-                // Calculate standard deviation
-                let stdDev = null;
-                if (values.length > 1 && baseline !== null) {
-                    const variance = values.reduce((sum, v) => sum + Math.pow(v - baseline, 2), 0) / values.length;
-                    stdDev = Math.sqrt(variance);
-                }
-
-                // Build points with Z-scores
-                const points = sortedRows.map((row, i) => {
-                    const value = values[i];
-                    let zScore = 0;
-                    if (stdDev && stdDev > 0) {
-                        zScore = (value - baseline) / stdDev;
-                    }
-                    return {
-                        timestamp: row.timestamp,
-                        value: value,
-                        zScore: zScore
-                    };
-                });
 
                 const stats = values.length > 0 ? {
                     min: Math.min(...values),
@@ -373,34 +315,59 @@ module.exports = NodeHelper.create({
         return routeUpdate;
     },
 
-    updateTraffic: async function() {
-        if (!this.config || this.quotaState.nonTileQuotaExhausted) return;
-
-        // Parallel fetching - O(1) instead of O(n) latency
-        const fetchPromises = this.config.routes.map(route =>
-            this.fetchSingleRoute(route).catch(error => {
-                if (this.isQuotaError(error)) {
-                    throw { quotaError: true };
-                }
-                console.error(`[TrafficGlance] Error updating route ${route.name}: ${this.sanitizeError(error)}`);
-                return null;
-            })
-        );
-
-        try {
-            const results = await Promise.all(fetchPromises);
-            const successfulRoutes = results.filter(r => r !== null);
-            this.sendSocketNotification("TRAFFIC_UPDATE", successfulRoutes);
-        } catch (error) {
-            if (error.quotaError) {
-                this.handleQuotaExhaustion();
+    fetchWithRetry: async function(route) {
+        while (true) {
+            try {
+                const data = await this.fetchSingleRoute(route);
+                this.errorHandler.resetRetries(`route:${route.name}`);
+                return { data };
+            } catch (error) {
+                const result = this.errorHandler.handleError(`route:${route.name}`, error);
+                if (result.action === 'quota_exhausted') throw { quotaError: true };
+                if (result.action !== 'retry') return { data: null, category: result.category };
+                await new Promise(r => setTimeout(r, result.backoffMs));
             }
         }
     },
 
+    updateTraffic: async function() {
+        if (!this.config || this.quotaState.nonTileQuotaExhausted) return;
+        if (this._fetchInProgress) return;
+        this._fetchInProgress = true;
+
+        try {
+            const fetchResults = await Promise.all(
+                this.config.routes.map(route => this.fetchWithRetry(route))
+            );
+            const successfulRoutes = fetchResults.filter(r => r.data !== null).map(r => r.data);
+            const errorCategory = fetchResults.find(r => r.category)?.category || null;
+            console.log(`[TrafficGlance] fetch complete — ${successfulRoutes.length}/${this.config.routes.length} routes OK, errorCategory: ${errorCategory}`);
+
+            if (successfulRoutes.length === 0 && this.config.routes.length > 0) {
+                this.sendSocketNotification("FETCH_ERROR", { category: errorCategory });
+            } else {
+                this.sendSocketNotification("TRAFFIC_UPDATE", successfulRoutes);
+            }
+        } catch (error) {
+            if (error.quotaError) {
+                this.handleQuotaExhaustion();
+            } else {
+                console.error('[TrafficGlance] updateTraffic failed unexpectedly:', error);
+                this.sendSocketNotification("FETCH_ERROR", { category: 'unknown' });
+            }
+        } finally {
+            this._fetchInProgress = false;
+        }
+    },
+
     socketNotificationReceived: function(notification, payload) {
+        if (notification === "RENDER_ERROR") {
+            console.error(`[TrafficGlance] Frontend render error: ${payload.message} (${payload.context})`);
+            return;
+        }
         if (notification === "CONFIG") {
             this.config = payload;
+            console.log(`[TrafficGlance] CONFIG received — routes: ${this.config?.routes?.length ?? 'none'}, apiKey present: ${!!this.config?.apiKey}`);
 
             // Validate lookback hours with performance safeguards
             const lookbackHours = this.config?.sparkline?.lookbackHours ||

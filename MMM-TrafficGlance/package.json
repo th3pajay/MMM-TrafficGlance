@@ -1,6 +1,6 @@
 {
   "name": "MMM-TrafficGlance",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "High-density traffic visualization with historical trend analysis and satellite map overlays.",
   "main": "MMM-TrafficGlance.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "magicmirror",
     "module",
     "traffic",
-    "openrouteservice",
+    "tomtom",
     "performance"
   ],
   "author": "th3pajay",

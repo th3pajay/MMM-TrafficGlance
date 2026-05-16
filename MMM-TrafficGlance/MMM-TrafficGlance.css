@@ -65,40 +65,6 @@
     color: var(--color-text-secondary);
 }
 
-.traffic-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 8px;
-}
-
-.name-cell {
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--font-size-base);
-    font-weight: 500;
-}
-
-.time-cell {
-    padding: var(--spacing-sm) var(--spacing-md);
-    text-align: right;
-    font-weight: bold;
-    transition: color var(--transition-medium);
-}
-
-.time-cell.rose {
-    color: var(--traffic-critical-alt);
-}
-
-.time-cell.green {
-    color: var(--traffic-good);
-}
-
-.time-cell.yellow {
-    color: var(--traffic-warning);
-}
-
-.time-cell.red {
-    color: var(--traffic-critical);
-}
 
 .big-num {
     font-size: var(--font-size-xl);
@@ -291,9 +257,6 @@
     color: var(--traffic-critical);  /* Red - significant delay, above 25% historical */
 }
 
-.route-time.rose {
-    color: var(--traffic-critical);  /* Alias for red for backwards compatibility */
-}
 
 /* Quota warning banner */
 .quota-warning {

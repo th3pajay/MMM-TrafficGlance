@@ -10,117 +10,35 @@ class SparklineEngine {
     }
 
     normalizeData(data) {
-        if (Array.isArray(data)) {
-            const points = data;
-            const values = points.map(p => p.value).filter(v => typeof v === 'number');
-            const baseline = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
-
-            // Calculate stdDev and zScores if not provided
-            let stdDev = null;
-            if (values.length > 1 && baseline !== null) {
-                const variance = values.reduce((sum, v) => sum + Math.pow(v - baseline, 2), 0) / values.length;
-                stdDev = Math.sqrt(variance);
-                points.forEach(p => {
-                    if (p.value !== null && stdDev > 0) {
-                        p.zScore = (p.value - baseline) / stdDev;
-                    } else {
-                        p.zScore = 0;
-                    }
-                });
-            }
-
-            return { points, baseline, stdDev, stats: null };
-        }
         return data || { points: [], baseline: null, stdDev: null, stats: null };
     }
 
-    // Interpolate missing values (nulls) between valid data points
-    interpolateValues(points) {
-        const values = points.map(p => p.value);
-        const result = [...values];
+    // Interpolate an array of values using a validity mask (null = gap).
+    // Extends edges and linearly fills gaps between valid points.
+    interpolateArray(source, validity) {
+        const result = [...source];
+        let firstValid = validity.findIndex(v => v !== null);
+        let lastValid = validity.length - 1;
+        while (lastValid >= 0 && validity[lastValid] === null) lastValid--;
+        if (firstValid === -1 || lastValid === -1) return result;
 
-        // Find first and last valid indices
-        let firstValid = values.findIndex(v => v !== null);
-        let lastValid = values.length - 1;
-        while (lastValid >= 0 && values[lastValid] === null) lastValid--;
+        for (let i = 0; i < firstValid; i++) result[i] = source[firstValid];
+        for (let i = lastValid + 1; i < source.length; i++) result[i] = source[lastValid];
 
-        if (firstValid === -1 || lastValid === -1) {
-            return result; // No valid data
-        }
-
-        // Extend first valid value to the left edge
-        for (let i = 0; i < firstValid; i++) {
-            result[i] = values[firstValid];
-        }
-
-        // Extend last valid value to the right edge
-        for (let i = lastValid + 1; i < values.length; i++) {
-            result[i] = values[lastValid];
-        }
-
-        // Interpolate gaps between valid points
         let prevValid = firstValid;
         for (let i = firstValid + 1; i <= lastValid; i++) {
-            if (values[i] !== null) {
-                // Fill any gap between prevValid and i
+            if (validity[i] !== null) {
                 if (i - prevValid > 1) {
-                    const startVal = values[prevValid];
-                    const endVal = values[i];
+                    const startVal = source[prevValid];
+                    const endVal = source[i];
                     const gap = i - prevValid;
                     for (let j = prevValid + 1; j < i; j++) {
-                        const t = (j - prevValid) / gap;
-                        result[j] = startVal + (endVal - startVal) * t;
+                        result[j] = startVal + (endVal - startVal) * ((j - prevValid) / gap);
                     }
                 }
                 prevValid = i;
             }
         }
-
-        return result;
-    }
-
-    // Interpolate Z-scores for interpolated values
-    interpolateZScores(points, interpolatedValues) {
-        const zScores = points.map(p => p.zScore !== undefined ? p.zScore : 0);
-        const result = [...zScores];
-
-        // Find first and last valid indices
-        const values = points.map(p => p.value);
-        let firstValid = values.findIndex(v => v !== null);
-        let lastValid = values.length - 1;
-        while (lastValid >= 0 && values[lastValid] === null) lastValid--;
-
-        if (firstValid === -1 || lastValid === -1) {
-            return result;
-        }
-
-        // Extend first valid Z-score to the left edge
-        for (let i = 0; i < firstValid; i++) {
-            result[i] = zScores[firstValid];
-        }
-
-        // Extend last valid Z-score to the right edge
-        for (let i = lastValid + 1; i < values.length; i++) {
-            result[i] = zScores[lastValid];
-        }
-
-        // Interpolate gaps
-        let prevValid = firstValid;
-        for (let i = firstValid + 1; i <= lastValid; i++) {
-            if (values[i] !== null) {
-                if (i - prevValid > 1) {
-                    const startZ = zScores[prevValid];
-                    const endZ = zScores[i];
-                    const gap = i - prevValid;
-                    for (let j = prevValid + 1; j < i; j++) {
-                        const t = (j - prevValid) / gap;
-                        result[j] = startZ + (endZ - startZ) * t;
-                    }
-                }
-                prevValid = i;
-            }
-        }
-
         return result;
     }
 
@@ -151,9 +69,12 @@ class SparklineEngine {
             return;
         }
 
-        // Interpolate missing values for continuous line
-        const interpolatedValues = this.interpolateValues(points);
-        const interpolatedZScores = this.interpolateZScores(points, interpolatedValues);
+        const validity = points.map(p => p.value);
+        const interpolatedValues = this.interpolateArray(points.map(p => p.value), validity);
+        const interpolatedZScores = this.interpolateArray(
+            points.map(p => p.zScore !== undefined ? p.zScore : 0),
+            validity
+        );
 
         const values = interpolatedValues;
 
@@ -223,45 +144,35 @@ class SparklineEngine {
         }
     }
 
-    hexToRgba(hex, alpha) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    buildColors() {
+        return {
+            critical: ColorTheme.traffic.criticalAlt,
+            warning: ColorTheme.traffic.warning,
+            good: ColorTheme.traffic.good,
+            neutral: ColorTheme.traffic.neutral,
+            baseline: ColorTheme.ui.baseline,
+            ...(this.config?.sparkline?.colors || {})
+        };
     }
 
     getColors(isAboveBaseline) {
-        const sparkConfig = this.config?.sparkline || {};
-        const defaultColors = {
-            critical: '#e91e63',
-            warning: '#f39c12',
-            good: '#2ecc71',
-            neutral: '#4fc3f7',
-            baseline: '#888888'
-        };
-        const colors = { ...defaultColors, ...sparkConfig.colors };
-
+        const colors = this.buildColors();
         const lineColor = isAboveBaseline ? colors.critical : colors.good;
         return {
             line: lineColor,
-            fill: this.hexToRgba(lineColor, 0.15),
+            fill: ColorTheme.hexToRgba(lineColor, 0.15),
             baseline: colors.baseline,
             now: lineColor
         };
     }
 
     getSegmentColor(zScore) {
-        const colors = this.config?.sparkline?.colors || {};
+        const colors = this.buildColors();
+        if (zScore < 0) return colors.good;
         const absZ = Math.abs(zScore);
-
-        // Only color deviations above the baseline (positive Z-scores)
-        if (zScore < 0) {
-            return colors.good || '#2ecc71';  // Green for below average
-        }
-
-        if (absZ < 1) return colors.good || '#2ecc71';      // Green: within 1 std dev
-        if (absZ < 2) return colors.warning || '#f39c12';   // Yellow: 1-2 std dev
-        return colors.critical || '#e91e63';                 // Red: >2 std dev
+        if (absZ < 1) return colors.good;
+        if (absZ < 2) return colors.warning;
+        return colors.critical;
     }
 
     drawYGrid(min, max, range, leftMargin = 0) {
@@ -336,27 +247,17 @@ class SparklineEngine {
         if (coords.length < 2) return;
 
         this.ctx.save();
-
-        // Create gradient from sparkline to bottom
         const gradient = this.ctx.createLinearGradient(0, 0, 0, this.h);
-
-        // Use appropriate color based on whether above or below baseline
-        const baseColor = isAboveBaseline ? '233, 30, 99' : '46, 204, 113';  // critical-alt or good
-        gradient.addColorStop(0, `rgba(${baseColor}, 0.15)`);  // 15% opacity at top
-        gradient.addColorStop(1, `rgba(${baseColor}, 0)`);     // transparent at bottom
-
+        const colors = this.buildColors();
+        const baseHex = isAboveBaseline ? colors.critical : colors.good;
+        gradient.addColorStop(0, ColorTheme.hexToRgba(baseHex, 0.15));
+        gradient.addColorStop(1, ColorTheme.hexToRgba(baseHex, 0));
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
-
-        // Start from first point
         this.ctx.moveTo(coords[0].x, coords[0].y);
-
-        // Draw along the sparkline
         for (let i = 1; i < coords.length; i++) {
             this.ctx.lineTo(coords[i].x, coords[i].y);
         }
-
-        // Close path to bottom-right, then bottom-left
         const lastPoint = coords[coords.length - 1];
         this.ctx.lineTo(lastPoint.x, this.h);
         this.ctx.lineTo(coords[0].x, this.h);

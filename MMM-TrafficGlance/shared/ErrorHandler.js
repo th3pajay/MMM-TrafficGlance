@@ -23,9 +23,12 @@ class ErrorHandler {
     categorizeError(error) {
         if (!error) return 'unknown';
 
-        // Quota errors
-        if (error.response?.status === 403) return 'quota';
+        // Quota errors — check body before treating 403 as quota; a bad API key also returns 403
         if (error.response?.status === 429) return 'rate_limit';
+        if (error.response?.status === 403) {
+            const body = JSON.stringify(error.response.data || '').toLowerCase();
+            return (body.includes('quota') || body.includes('too many')) ? 'quota' : 'auth_failure';
+        }
 
         const errorText = JSON.stringify(error.response?.data || error.message || '').toLowerCase();
         if (errorText.includes('quota') || errorText.includes('rate limit')) return 'quota';
@@ -53,6 +56,7 @@ class ErrorHandler {
     getUserMessage(error, category) {
         const messages = {
             quota: 'API quota exceeded. Switching to traffic tiles only.',
+            auth_failure: 'API key rejected (403). Check apiKey in config.',
             rate_limit: 'Rate limit reached. Retrying with backoff...',
             network: 'Network connection failed. Check your internet connection.',
             server_error: 'TomTom API server error. Retrying...',
@@ -83,8 +87,8 @@ class ErrorHandler {
     shouldRetry(context, category) {
         const attempts = this.retryAttempts.get(context) || 0;
 
-        // Never retry quota errors (handled separately)
-        if (category === 'quota') return false;
+        // Never retry quota or auth errors
+        if (category === 'quota' || category === 'auth_failure') return false;
 
         // Retry network, server, and rate limit errors
         if (['network', 'server_error', 'rate_limit'].includes(category)) {
@@ -133,8 +137,8 @@ class ErrorHandler {
 
         return {
             action: category === 'quota' ? 'quota_exhausted' : 'fail',
-            userMessage: userMessage,
-            category: category
+            userMessage,
+            category
         };
     }
 

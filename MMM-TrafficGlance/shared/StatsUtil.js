@@ -5,7 +5,7 @@
  * across node_helper.js and TemplateEngine.js
  */
 
-const StatsUtil = {
+var StatsUtil = {
     /**
      * Calculate Z-scores for a set of values relative to a baseline
      *

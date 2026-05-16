@@ -28,22 +28,18 @@ class MapStateMachine {
     }
 
     /**
-     * Valid state transitions
-     */
-    static VALID_TRANSITIONS = {
-        [MapStates.UNINITIALIZED]: [MapStates.SCHEDULED],
-        [MapStates.SCHEDULED]: [MapStates.INITIALIZING, MapStates.UNINITIALIZED],
-        [MapStates.INITIALIZING]: [MapStates.READY, MapStates.ERROR, MapStates.UNINITIALIZED],
-        [MapStates.READY]: [MapStates.UNINITIALIZED],
-        [MapStates.ERROR]: [MapStates.SCHEDULED, MapStates.UNINITIALIZED]
-    };
-
-    /**
      * Attempt to transition to a new state
      * @returns {boolean} True if transition is valid, false otherwise
      */
     transition(newState) {
-        const validTransitions = MapStateMachine.VALID_TRANSITIONS[this.state] || [];
+        const table = {
+            [MapStates.UNINITIALIZED]: [MapStates.SCHEDULED],
+            [MapStates.SCHEDULED]:     [MapStates.INITIALIZING, MapStates.UNINITIALIZED],
+            [MapStates.INITIALIZING]:  [MapStates.READY, MapStates.ERROR, MapStates.UNINITIALIZED],
+            [MapStates.READY]:         [MapStates.UNINITIALIZED],
+            [MapStates.ERROR]:         [MapStates.SCHEDULED, MapStates.UNINITIALIZED]
+        };
+        const validTransitions = table[this.state] || [];
 
         if (!validTransitions.includes(newState)) {
             console.warn(`[MapStateMachine] Invalid transition from ${this.state} to ${newState}`);

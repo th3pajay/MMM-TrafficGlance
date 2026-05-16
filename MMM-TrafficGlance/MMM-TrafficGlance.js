@@ -50,34 +50,31 @@ Module.register("MMM-TrafficGlance", {
             showLegend: true             // inline legend below sparkline
         },
 
-        queryTimeouts: {
-            historical: 10000,
-            sparkline: 12000
-        }
     },
 
     getStyles: () => ["MMM-TrafficGlance.css", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"],
-    getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "MapRenderer.js", "TemplateEngine.js"],
+    getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "ColorTheme.js", "MapStateMachine.js", "MapRenderer.js", "TemplateEngine.js"],
 
     start: function() {
         this.trafficData = [];
         this.mapEngine = null;
         this.configErrors = null;
         this.persistentWrapper = null;  // Cache DOM root to prevent recreation
-        this.mapInitialized = false;    // Track whether map is ready
-        this.mapInitInProgress = false; // Prevent concurrent initialization
-        this.domGeneration = 0;         // Track DOM version for stale callback detection
-        this.quotaExhausted = false;    // Track quota exhaustion state
-        this.nextResetTime = null;      // Store quota reset time
+        this.mapState = new MapStateMachine();
+        this.sparklineTimeouts = new Map();
+        this.quotaExhausted = false;
+        this.nextResetTime = null;
+        this.fetchError = null;
         this.sendSocketNotification("CONFIG", this.config);
     },
 
     socketNotificationReceived: function(notification, payload) {
         if (notification === "TRAFFIC_UPDATE") {
+            this.fetchError = null;
             this.trafficData = payload;
 
             // If map already initialized, update data directly without DOM recreation
-            if (this.mapInitialized && this.mapEngine && this.persistentWrapper) {
+            if (this.mapState.isReady() && this.mapEngine && this.persistentWrapper) {
                 this.updateRouteContainer();
                 this.mapEngine.draw(this.trafficData);
             } else {
@@ -99,27 +96,29 @@ Module.register("MMM-TrafficGlance", {
             }
 
             // Force DOM update to show warning banner and initialize map with traffic tiles
-            this.persistentWrapper = null;  // Clear cache to force full rebuild
-            this.mapInitialized = false;    // Force map reinitialization with new tile layer
+            this.persistentWrapper = null;
+            this.mapState.reset();
             this.updateDom();
         }
         else if (notification === "QUOTA_RESTORED") {
             console.log('[TrafficGlance] Quota restored, resuming normal mode');
             this.quotaExhausted = false;
 
-            // Switch back to CartoDB tiles if map already exists
             if (this.mapEngine) {
                 this.mapEngine.switchTileLayer(false);
             }
 
-            // Force DOM update to remove warning banner and reinitialize map
-            this.persistentWrapper = null;  // Clear cache to force full rebuild
-            this.mapInitialized = false;    // Force map reinitialization with CartoDB tiles
+            this.persistentWrapper = null;
+            this.mapState.reset();
             this.updateDom();
         }
         else if (notification === "TILE_ONLY_MODE") {
             // Just show map with tiles, no route data updates
             console.log('[TrafficGlance] Tile-only mode active');
+        }
+        else if (notification === "FETCH_ERROR") {
+            this.fetchError = payload.category;
+            if (this.trafficData.length === 0) this.updateDom();
         }
         else if (notification === "CONFIG_ERROR") {
             this.configErrors = payload.errors;
@@ -169,7 +168,13 @@ Module.register("MMM-TrafficGlance", {
         if (this.trafficData.length === 0 && !this.quotaExhausted) {
             const loadingDiv = document.createElement("div");
             loadingDiv.className = "loading";
-            loadingDiv.textContent = "Analyzing TomTom Traffic...";
+            if (this.fetchError === 'network') {
+                loadingDiv.textContent = "Network unavailable — retrying...";
+            } else if (this.fetchError) {
+                loadingDiv.textContent = "Traffic data unavailable — retrying...";
+            } else {
+                loadingDiv.textContent = "Analyzing TomTom Traffic...";
+            }
             wrapper.appendChild(loadingDiv);
             return wrapper;
         }
@@ -180,7 +185,11 @@ Module.register("MMM-TrafficGlance", {
             routeContainer.className = "route-container";
 
             this.trafficData.forEach(route => {
-                routeContainer.appendChild(this.renderRouteRow(route));
+                try {
+                    routeContainer.appendChild(this.renderRouteRow(route));
+                } catch (e) {
+                    this.sendSocketNotification("RENDER_ERROR", { message: e.message, context: `route:${route.id}` });
+                }
             });
 
             wrapper.appendChild(routeContainer);
@@ -244,11 +253,15 @@ Module.register("MMM-TrafficGlance", {
 
             metricsDiv.appendChild(sparklineContainer);
 
-            setTimeout(() => {
-                const engine = new SparklineEngine(`sparkline-${route.id}`,
-                    route.sparklineData, this.config);
+            if (this.sparklineTimeouts.has(route.id)) {
+                clearTimeout(this.sparklineTimeouts.get(route.id));
+            }
+            const tid = setTimeout(() => {
+                this.sparklineTimeouts.delete(route.id);
+                const engine = new SparklineEngine(`sparkline-${route.id}`, route.sparklineData, this.config);
                 if (engine.canvas) engine.render();
             }, 100);
+            this.sparklineTimeouts.set(route.id, tid);
         }
 
         // Trend arrow (if historical data available)
@@ -265,23 +278,7 @@ Module.register("MMM-TrafficGlance", {
         routeDiv.appendChild(header);
 
         // Time display with historical average comparison
-        let colorClass = 'green';  // Default to green
-
-        if (route.historicalAverage !== null && route.historicalAverage !== undefined) {
-            const percentAboveHistorical = ((route.currentDuration - route.historicalAverage) / route.historicalAverage) * 100;
-
-            if (percentAboveHistorical > 25) {
-                colorClass = 'red';      // Above 25%
-            } else if (percentAboveHistorical >= 1) {
-                colorClass = 'yellow';   // 1-25% above historical
-            }
-            // else stays green (0% or below)
-        } else {
-            // Fallback to delayFactor logic if no historical data
-            if (route.delayFactor >= 1.25) {
-                colorClass = 'red';
-            }
-        }
+        const colorClass = ColorTheme.getRouteColorClass(route, this.config.thresholds?.critical);
 
         const timeDiv = document.createElement("div");
         timeDiv.className = `route-time ${colorClass}`;
@@ -312,83 +309,60 @@ Module.register("MMM-TrafficGlance", {
 
         // Rebuild route rows with current data
         this.trafficData.forEach(route => {
-            routeContainer.appendChild(this.renderRouteRow(route));
+            try {
+                routeContainer.appendChild(this.renderRouteRow(route));
+            } catch (e) {
+                this.sendSocketNotification("RENDER_ERROR", { message: e.message, context: `route:${route.id}` });
+            }
         });
     },
 
     scheduleMapInit: function() {
-        // Don't initialize if already done or in progress
-        if (this.mapInitialized || this.mapInitInProgress) {
-            return;
-        }
+        if (this.mapState.isReady() || this.mapState.isInProgress()) return;
+        if (this.mapInitTimeout) clearTimeout(this.mapInitTimeout);
 
-        // Cancel any pending initialization
-        if (this.mapInitTimeout) {
-            clearTimeout(this.mapInitTimeout);
-        }
+        const currentGeneration = this.mapState.scheduleInit();
+        if (currentGeneration === null) return;
 
-        // Mark initialization in progress
-        this.mapInitInProgress = true;
-
-        // Increment DOM generation to invalidate stale callbacks
-        this.domGeneration++;
-        const currentGeneration = this.domGeneration;
-
-        // Use requestAnimationFrame for next render cycle
         this.mapInitTimeout = setTimeout(() => {
             requestAnimationFrame(() => {
-                // Validate DOM generation to prevent stale callbacks
-                if (this.domGeneration !== currentGeneration) {
-                    this.mapInitInProgress = false;
-                    return;
-                }
+                if (!this.mapState.beginInit(currentGeneration)) return;
 
                 const container = document.getElementById("traffic-map-container");
                 if (container && container.offsetParent !== null) {
-                    // Container is visible and rendered
-                    this.initMap(currentGeneration);
+                    this.initMap();
                 } else {
-                    // Retry if not ready
-                    this.mapInitInProgress = false;
+                    this.mapState.cancel();
                     this.scheduleMapInit();
                 }
             });
         }, 100);
     },
 
-    initMap: function(expectedGeneration) {
+    initMap: function() {
         try {
-            // Validate DOM generation
-            if (expectedGeneration && this.domGeneration !== expectedGeneration) {
-                return;
-            }
-
             const container = document.getElementById("traffic-map-container");
             if (!container || container.offsetParent === null) {
+                this.mapState.cancel();
                 return;
             }
 
-            // Clean up existing map
             if (this.mapEngine) {
                 this.mapEngine.destroy();
                 this.mapEngine = null;
             }
 
-            // Set tile layer flag based on quota state
             this.config.useTomTomTrafficTiles = this.quotaExhausted;
 
-            // Create new map if we have data OR if quota is exhausted (to show traffic tiles)
             if (this.trafficData.length > 0 || this.quotaExhausted) {
                 this.mapEngine = new MapRenderer("traffic-map-container", this.config);
 
                 if (this.trafficData.length > 0) {
                     this.mapEngine.draw(this.trafficData);
                 } else if (this.quotaExhausted) {
-                    // Show map with default view when quota exhausted but no route data
                     let defaultCenter = this.config.mapCenter;
                     let defaultZoom = this.config.mapZoom || 10;
 
-                    // If no mapCenter configured, try to calculate from route origins
                     if (!defaultCenter && this.config.routes && this.config.routes.length > 0) {
                         try {
                             const firstRoute = this.config.routes[0];
@@ -401,42 +375,38 @@ Module.register("MMM-TrafficGlance", {
                         }
                     }
 
-                    // Fallback to a reasonable default
                     if (!defaultCenter) {
-                        defaultCenter = [47.3, 19.1]; // Central Europe default
+                        defaultCenter = [47.3, 19.1];
                     }
 
                     this.mapEngine.map.setView(defaultCenter, defaultZoom);
                 }
 
-                this.mapInitialized = true;
+                this.mapState.markReady();
+            } else {
+                this.mapState.cancel();
             }
-        } finally {
-            this.mapInitInProgress = false;
+        } catch (e) {
+            this.mapState.markError(e.message);
+            console.error('[TrafficGlance] Map init failed:', e.message);
+            setTimeout(() => this.scheduleMapInit(), 30000);
         }
     },
 
     suspend: function() {
-        // Cancel pending initialization
         if (this.mapInitTimeout) {
             clearTimeout(this.mapInitTimeout);
             this.mapInitTimeout = null;
         }
-
-        // Mark initialization as not in progress
-        this.mapInitInProgress = false;
-
-        // Destroy map to free memory
         if (this.mapEngine) {
             this.mapEngine.destroy();
             this.mapEngine = null;
-            this.mapInitialized = false;
         }
+        this.mapState.reset();
     },
 
     resume: function() {
-        // Re-initialize map if we have data
-        if (this.trafficData.length > 0 && !this.mapInitialized) {
+        if (this.trafficData.length > 0 && !this.mapState.isReady()) {
             this.scheduleMapInit();
         }
     }

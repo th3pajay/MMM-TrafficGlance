@@ -17,6 +17,9 @@ class MapRenderer {
         this.tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19
         }).addTo(this.map);
+        if (this.config.showMapScale !== false) {
+            L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(this.map);
+        }
     }
 
     switchTileLayer(useTomTomTiles) {
@@ -47,27 +50,6 @@ class MapRenderer {
         }
     }
 
-    getRouteColor(route) {
-        const colors = {
-            green: '#2ecc71',
-            yellow: '#f39c12',
-            red: '#e91e63'
-        };
-
-        if (route.historicalAverage !== null && route.historicalAverage !== undefined && route.historicalAverage > 0) {
-            const percentAbove = ((route.currentDuration - route.historicalAverage) / route.historicalAverage) * 100;
-            if (percentAbove > 25) return colors.red;
-            if (percentAbove >= 1) return colors.yellow;
-            return colors.green;
-        }
-
-        if (route.delayFactor && route.delayFactor >= 1.25) {
-            return colors.red;
-        }
-
-        return colors.green;
-    }
-
     draw(trafficData) {
         if (!this.map || !trafficData || trafficData.length === 0) return;
 
@@ -80,7 +62,7 @@ class MapRenderer {
             const latLngs = route.polyline.map(p => [p.latitude, p.longitude]);
             allPoints.push(...latLngs);
 
-            const routeColor = this.getRouteColor(route);
+            const routeColor = ColorTheme.getRouteColor(route, this.config.thresholds?.critical);
 
             L.polyline(latLngs, {
                 color: routeColor,
@@ -107,7 +89,7 @@ class MapRenderer {
 
         if (allPoints.length > 0) {
             const bounds = L.latLngBounds(allPoints);
-            this.map.fitBounds(bounds, { padding: [15, 15] });
+            this.map.fitBounds(bounds, { padding: this.config.mapPadding || [15, 15] });
         }
 
         setTimeout(() => {

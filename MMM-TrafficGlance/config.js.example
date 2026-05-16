@@ -36,12 +36,6 @@
             cleanupOnStart: true    // purge old records on module start
         },
 
-        // Query timeouts (ms) — increase on slow Raspberry Pi hardware
-        queryTimeouts: {
-            historical: 10000,
-            sparkline: 12000
-        },
-
         // Sparkline charts
         sparkline: {
             enabled: true,
