@@ -23,25 +23,6 @@ var ColorTheme = {
         return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
     },
 
-    getColorByZScore: function(zScore) {
-        if (zScore < 0) return this.traffic.good;
-        var absZ = Math.abs(zScore);
-        if (absZ < 1) return this.traffic.good;
-        if (absZ < 2) return this.traffic.warning;
-        return this.traffic.criticalAlt;
-    },
-
-    getColorByPercentAboveHistorical: function(percentAbove) {
-        if (percentAbove > 25) return this.traffic.critical;
-        if (percentAbove >= 1) return this.traffic.warning;
-        return this.traffic.good;
-    },
-
-    getColorByDelayFactor: function(delayFactor) {
-        if (delayFactor >= 1.25) return this.traffic.critical;
-        return this.traffic.good;
-    },
-
     getRouteColorClass: function(route, criticalThreshold) {
         var threshold = criticalThreshold != null ? criticalThreshold : 1.25;
         if (route.historicalAverage != null && route.historicalAverage > 0) {
@@ -59,19 +40,4 @@ var ColorTheme = {
         return { green: this.traffic.good, yellow: this.traffic.warning, red: this.traffic.criticalAlt }[cls];
     },
 
-    getMapColors: function() {
-        return {
-            green: this.traffic.good,
-            yellow: this.traffic.warning,
-            red: this.traffic.criticalAlt
-        };
-    }
 };
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ColorTheme;
-}
-
-if (typeof window !== 'undefined') {
-    window.ColorTheme = ColorTheme;
-}

@@ -1,0 +1,65 @@
+.MMM-TrafficGlance { min-width: 400px !important; max-width: none !important; }
+
+.traffic-root {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #fff;
+    min-width: 400px;
+    width: 100%;
+
+    .loading { text-align: center; padding: 16px; font-size: 14px; color: #aaa; }
+
+    .route-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 12px 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        border-radius: 4px;
+        background: rgba(255,255,255,0.03);
+        margin-bottom: 4px;
+
+        &:last-child { border-bottom: none; }
+    }
+
+    .route-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .route-name { font-size: 14px; font-weight: 500; }
+    .route-metrics { display: flex; align-items: center; gap: 8px; }
+    .sparkline-container { display: flex; flex-direction: column; }
+    .sparkline-canvas { opacity: 0.9; }
+
+    .trend-arrow { font-size: 18px; font-weight: bold; line-height: 1; }
+    .trend-arrow.up { color: #e91e63; }
+    .trend-arrow.down { color: #2ecc71; }
+    .trend-arrow.stable { color: #888; }
+
+    .route-time { grid-column: 1 / -1; transition: color 300ms; }
+    .route-time.green { color: #2ecc71; }
+    .route-time.yellow { color: #f39c12; }
+    .route-time.red { color: #c0392b; }
+
+    .big-num { font-size: 24px; margin-right: 4px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .unit { font-size: 10px; opacity: 0.7; }
+
+    .quota-warning {
+        background: rgba(255,152,0,0.2);
+        border-left: 3px solid #f39c12;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        font-size: 10px;
+        text-align: center;
+        border-radius: 4px;
+
+        small { display: block; margin-top: 4px; opacity: 0.8; }
+    }
+
+    #traffic-map-container {
+        width: 100% !important;
+        min-width: 280px;
+        border-radius: 4px;
+        overflow: hidden;
+        min-height: 180px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+
+        .leaflet-container { width: 100% !important; height: 100% !important; background: #1a1a2e; }
+    }
+}
