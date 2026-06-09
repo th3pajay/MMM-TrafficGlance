@@ -1,9 +1,12 @@
 # Runtime
 node_modules/
+scripts/
 traffic.db
 *.db
 *.db-shm
 *.db-wal
+
+package-lock.json
 
 # Logs
 *.log
@@ -11,3 +14,10 @@ traffic.db
 # OS
 .DS_Store
 Thumbs.db
+nul
+
+# IDE / editor
+.idea/
+
+# Deployment
+.pm2ignore
