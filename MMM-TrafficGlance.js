@@ -25,8 +25,8 @@ Module.register("MMM-TrafficGlance", {
         } else if (notification === "QUOTA_EXHAUSTED" || notification === "QUOTA_RESTORED") {
             this._quotaExhausted = notification === "QUOTA_EXHAUSTED";
             if (this._quotaExhausted) this._nextReset = payload.nextResetTime;
+            if (this._mapEngine) { this._mapEngine.destroy(); this._mapEngine = null; }
             this._wrapper = null; this._mapReady = false;
-            if (this._mapEngine) this._mapEngine.switchTileLayer(this._quotaExhausted);
             this.updateDom();
         } else if (notification === "FETCH_ERROR") {
             this._fetchError = payload.category;
@@ -79,13 +79,14 @@ Module.register("MMM-TrafficGlance", {
         rc.innerHTML = ""; this.trafficData.forEach(r => rc.appendChild(this._routeRow(r)));
     },
 
-    _initMap() {
-        if (this._mapReady) return;
+    _initMap(attempt = 0) {
+        if (this._mapReady || attempt > 10) return;
         const el = document.getElementById("traffic-map-container");
-        if (!el || el.offsetParent === null) { setTimeout(() => this._initMap(), 1000); return; }
+        if (!el || el.offsetParent === null) { setTimeout(() => this._initMap(attempt + 1), 1000); return; }
         if (this._mapEngine) { this._mapEngine.destroy(); this._mapEngine = null; }
         this._mapEngine = new MapRenderer("traffic-map-container", this.config);
-        if (this.trafficData.length) this._mapEngine.draw(this.trafficData);
+        if (this._quotaExhausted) this._mapEngine.switchTileLayer(true);
+        if (this.trafficData.length) { this._mapEngine.draw(this.trafficData); this._mapEngine.map.invalidateSize(); }
         else if (this._quotaExhausted) this._mapEngine.map.setView(this.config.mapCenter || [47.3, 19.1], this.config.mapZoom || 10);
         this._mapReady = true;
     }

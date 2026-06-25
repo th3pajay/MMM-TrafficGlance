@@ -10,17 +10,29 @@ module.exports = NodeHelper.create({
         this._polylines = {};
     },
 
+    stop() {
+        if (this.intervalId) clearInterval(this.intervalId);
+        if (this._midnightId) clearInterval(this._midnightId);
+        this.db?.close?.();
+    },
+
     _initDb() {
         this.db = new DatabaseSync(__dirname + "/traffic.db");
-        const info = this.db.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('traffic_history')").get();
-        if (info.n > 0 && info.n !== 3) this.db.exec("DROP TABLE traffic_history");
+        const v = this.db.prepare("PRAGMA user_version").get().user_version;
+        if (v < 1) {
+            this.db.exec("DROP TABLE IF EXISTS traffic_history");
+            this.db.exec("PRAGMA user_version=1");
+        }
         this.db.exec("CREATE TABLE IF NOT EXISTS traffic_history(route_id TEXT,travel_time INTEGER,timestamp INTEGER)");
+        this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_rt ON traffic_history(route_id,timestamp)");
+        this.db.exec("CREATE INDEX IF NOT EXISTS idx_traffic_ts ON traffic_history(route_id,timestamp DESC)");
         this.db.prepare("DELETE FROM traffic_history WHERE timestamp<?").run(Math.floor(Date.now() / 1000) - 90 * 86400);
-        this._ins = this.db.prepare("INSERT INTO traffic_history VALUES(?,?,?)");
+        this._ins = this.db.prepare("INSERT OR IGNORE INTO traffic_history VALUES(?,?,?)");
         this._sel = this.db.prepare("SELECT travel_time,timestamp FROM traffic_history WHERE route_id=? AND timestamp>=? ORDER BY timestamp DESC LIMIT ?");
     },
 
     _sparkline(routeId) {
+        if (!this.db) return { points: [], baseline: null, stdDev: null };
         const hours = this.config.sparkline?.lookbackHours ?? 48;
         const max = this.config.sparkline?.maxDataPoints ?? 50;
         const cutoff = Math.floor(Date.now() / 1000) - hours * 3600;
@@ -57,19 +69,21 @@ module.exports = NodeHelper.create({
         const r = json.routes?.[0];
         if (!r) return null;
         const s = r.summary;
-        if (!this._polylines[route.id]) this._polylines[route.id] = r.legs[0].points;
-        this._ins.run(route.id, s.travelTimeInSeconds, Math.floor(Date.now() / 1000));
+        const isNew = !this._polylines[route.id];
+        if (isNew) this._polylines[route.id] = r.legs?.[0]?.points ?? [];
+        if (this.db) this._ins.run(route.id, s.travelTimeInSeconds, Math.floor(Date.now() / 1000));
         const live = Math.round(s.travelTimeInSeconds / 60);
         const hist = Math.round(s.historicTrafficTravelTimeInSeconds / 60);
+        const ntt = s.noTrafficTravelTimeInSeconds;
         return {
             id: route.id, name: route.name,
             currentDuration: live, historicalAverage: hist,
-            delayFactor: s.travelTimeInSeconds / s.noTrafficTravelTimeInSeconds,
+            delayFactor: ntt > 0 ? s.travelTimeInSeconds / ntt : 1,
             trendDirection: live > hist ? "up" : live < hist ? "down" : "stable",
             bottlenecks: (r.sections ?? [])
                 .filter(x => x.sectionType === "traffic" && x.delayInSeconds > 30)
                 .map(({ startPointIndex, endPointIndex, magnitudeOfDelay: magnitude }) => ({ startPointIndex, endPointIndex, magnitude })),
-            polyline: this._polylines[route.id],
+            polyline: isNew ? this._polylines[route.id] : undefined,
             sparklineData: this._sparkline(route.id)
         };
     },
@@ -102,10 +116,11 @@ module.exports = NodeHelper.create({
 
     socketNotificationReceived(notification, payload) {
         if (notification !== "CONFIG") return;
-        this.config = payload;
-        if (!this.db) this._initDb();
-        this._update();
         if (this.intervalId) clearInterval(this.intervalId);
+        this._polylines = {};
+        this.config = payload;
+        if (!this.db) try { this._initDb(); } catch { this.db = null; }
+        this._update();
         this.intervalId = setInterval(() => this._update(), this.config.updateInterval);
     }
 });
