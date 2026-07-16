@@ -4,7 +4,9 @@ var ColorTheme = {
         warning: '#f39c12',
         critical: '#c0392b',
         criticalAlt: '#e91e63',
-        neutral: '#4fc3f7'
+        neutral: '#4fc3f7',
+        roadwork: '#f39c12',
+        closure: '#9b59b6'
     },
 
     ui: {
@@ -27,7 +29,8 @@ var ColorTheme = {
         var threshold = criticalThreshold != null ? criticalThreshold : 1.25;
         if (route.historicalAverage != null && route.historicalAverage > 0) {
             var pct = ((route.currentDuration - route.historicalAverage) / route.historicalAverage) * 100;
-            if (pct > 25) return 'red';
+            var criticalPct = (threshold - 1) * 100;
+            if (pct > criticalPct) return 'red';
             if (pct >= 1) return 'yellow';
             return 'green';
         }
@@ -38,6 +41,12 @@ var ColorTheme = {
     getRouteColor: function(route, criticalThreshold) {
         var cls = this.getRouteColorClass(route, criticalThreshold);
         return { green: this.traffic.good, yellow: this.traffic.warning, red: this.traffic.criticalAlt }[cls];
+    },
+
+    getIncidentColor: function(category, magnitude) {
+        if (category === 'ROAD_CLOSURE') return this.traffic.closure;
+        if (category === 'ROAD_WORK') return this.traffic.roadwork;
+        return magnitude === 4 ? this.traffic.critical : '#e74c3c';
     },
 
 };

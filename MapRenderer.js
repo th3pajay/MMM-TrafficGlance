@@ -51,19 +51,21 @@ class MapRenderer {
             const existing = this._layers.get(route.id);
             if (existing) {
                 existing.line.setLatLngs(latLngs).setStyle({ color });
-                existing.bottlenecks.forEach(b => this.routeLayer.removeLayer(b));
+                existing.incidents.forEach(b => this.routeLayer.removeLayer(b));
             } else {
                 const line = L.polyline(latLngs, { color, weight: 5, opacity: 0.9, lineJoin: 'round', lineCap: 'round' }).addTo(this.routeLayer);
-                this._layers.set(route.id, { line, latLngs, bottlenecks: [] });
+                this._layers.set(route.id, { line, latLngs, incidents: [] });
             }
 
             const entry = this._layers.get(route.id);
             entry.latLngs = latLngs;
-            entry.bottlenecks = (route.bottlenecks ?? []).map(s => {
+            entry.incidents = (route.incidents ?? []).map(s => {
                 const seg = latLngs.slice(s.startPointIndex, s.endPointIndex + 1);
+                const closure = s.category === 'ROAD_CLOSURE';
                 return L.polyline(seg, {
-                    color: s.magnitude === 4 ? ColorTheme.traffic.critical : '#e74c3c',
-                    weight: 7, opacity: 1, lineCap: 'round'
+                    color: ColorTheme.getIncidentColor(s.category, s.magnitude),
+                    weight: 7, opacity: 1, lineCap: 'round',
+                    dashArray: closure ? '2, 8' : s.category === 'ROAD_WORK' ? '10, 6' : null
                 }).addTo(this.routeLayer);
             });
         });
@@ -71,11 +73,11 @@ class MapRenderer {
         for (const [id, entry] of this._layers) {
             if (!seen.has(id)) {
                 this.routeLayer.removeLayer(entry.line);
-                entry.bottlenecks.forEach(b => this.routeLayer.removeLayer(b));
+                entry.incidents.forEach(b => this.routeLayer.removeLayer(b));
                 this._layers.delete(id);
             }
         }
 
-        if (allPoints.length) this.map.fitBounds(L.latLngBounds(allPoints), { padding: this.config.mapPadding || [15, 15] });
+        if (allPoints.length) this.map.fitBounds(L.latLngBounds(allPoints), { padding: this.config.mapPadding || [20, 20] });
     }
 }

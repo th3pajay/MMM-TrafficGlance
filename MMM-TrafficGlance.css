@@ -6,7 +6,8 @@
     min-width: 400px;
     width: 100%;
 
-    .loading { text-align: center; padding: 16px; font-size: 14px; color: #aaa; }
+    @keyframes tg-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+    .loading { text-align: center; padding: 16px; font-size: 14px; color: #aaa; animation: tg-pulse 2s ease-in-out infinite; }
 
     .route-row {
         display: grid;
@@ -14,8 +15,8 @@
         gap: 8px;
         padding: 12px 8px;
         border-bottom: 1px solid rgba(255,255,255,0.1);
-        border-radius: 4px;
-        background: rgba(255,255,255,0.03);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.05);
         margin-bottom: 4px;
 
         &:last-child { border-bottom: none; }
@@ -39,6 +40,19 @@
 
     .big-num { font-size: 24px; margin-right: 4px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
     .unit { font-size: 10px; opacity: 0.7; }
+    .route-delta { font-size: 11px; font-weight: 500; margin-left: 6px; opacity: 0.85; }
+
+    .route-incidents {
+        grid-column: 1 / -1;
+        margin-top: 2px;
+        font-size: 10px;
+        color: #aaa;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .incident-tag { font-size: 8px; }
+    .incident-sep { margin: 0 4px; opacity: 0.5; }
 
     .quota-warning {
         background: rgba(255,152,0,0.2);
@@ -53,6 +67,7 @@
     }
 
     #traffic-map-container {
+        margin-top: 8px;
         width: 100% !important;
         min-width: 280px;
         border-radius: 4px;

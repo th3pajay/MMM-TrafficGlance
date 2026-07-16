@@ -3,7 +3,7 @@
 Real-time traffic monitoring module for MagicMirror² with TomTom integration, historical sparkline analysis, and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.1.12-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.20-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -15,7 +15,7 @@ Real-time traffic monitoring module for MagicMirror² with TomTom integration, h
 
 - Real-time travel times via TomTom Routing API
 - Sparkline charts with Z-score color coding (green → yellow → red)
-- Leaflet map with color-coded route polylines and bottleneck overlay
+- Leaflet map with color-coded route polylines and categorized incident overlay (jam, roadwork, closure)
 - SQLite history via Node built-in `node:sqlite` — no npm dependencies
 - Quota-exhaustion fallback to TomTom traffic tile layer
 
@@ -54,11 +54,14 @@ No `npm install` — zero dependencies.
         mapPadding: [20, 20],
 
         api: {
+            timeout: 10000,         // request timeout (ms)
             routeType: "fastest",   // "fastest" | "shortest" | "eco" | "thrilling"
             travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
             traffic: true,
             avoidTolls: false,
-            avoidHighways: false
+            avoidHighways: false,
+            incidents: false,      // set true to detect jam/roadwork/closure incidents
+            incidentCategories: null // e.g. ["ROAD_CLOSURE","ROAD_WORK"]; null = show all
         },
 
         thresholds: {
@@ -68,7 +71,7 @@ No `npm install` — zero dependencies.
         sparkline: {
             enabled: true,
             width: 160,
-            height: 40,
+            height: 52,             // 40 chart + 12 for x-axis labels
             lookbackHours: 48,      // history window
             maxDataPoints: 50
         },
@@ -115,6 +118,8 @@ No `npm install` — zero dependencies.
 | `traffic` | `true` | Include live traffic in routing |
 | `avoidTolls` | `false` | Avoid toll roads |
 | `avoidHighways` | `false` | Avoid motorways |
+| `incidents` | `false` | Detect and render jam/roadwork/closure incidents on routes |
+| `incidentCategories` | `null` | Only applies when `incidents` is `true`; filter to these categories, e.g. `["ROAD_CLOSURE","ROAD_WORK"]`; `null` shows all (`JAM`, `ROAD_WORK`, `ROAD_CLOSURE`, `OTHER`) |
 
 **`thresholds`**
 
@@ -136,6 +141,8 @@ No `npm install` — zero dependencies.
 | `showNowIndicator` | `true` | Dot at latest measurement |
 | `showNowLabel` | `true` | "NOW" label next to the dot |
 | `useZScoreColors` | `true` | Color segments by Z-score deviation |
+| `showXAxisLabels` | `true` | Show `HH:mm` time labels under the sparkline (reserves 12px of the canvas height) |
+| `colors` | `{}` | Override sparkline colors, e.g. `{ critical, warning, good, baseline }`; falls back to `ColorTheme.traffic` colors when unset |
 
 **`routes[]`**
 

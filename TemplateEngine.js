@@ -17,6 +17,10 @@ class SparklineEngine {
         if (!valid.length) { this._empty(); return; }
         if (valid.length === 1) { this._degenerate(valid[0].value, baseline, false); return; }
 
+        const showAxis = this.config?.sparkline?.showXAxisLabels !== false;
+        const axisMargin = showAxis ? 12 : 0;
+        const chartH = this.h - axisMargin;
+
         const vals = valid.map(p => p.value);
         const dmax = Math.max(...vals), dmin = Math.min(...vals);
         const pad = (dmax - dmin) * 0.15 || 1;
@@ -26,14 +30,54 @@ class SparklineEngine {
         if (!isFinite(range) || range === 0) { this._degenerate(valid[0].value, baseline, true); return; }
 
         const step = this.w / (valid.length - 1);
-        const toY = v => this.h - ((v - min) / range * this.h);
-        const coords = valid.map((p, i) => ({ x: i * step, y: toY(p.value), z: p.zScore ?? 0 }));
+        const toY = v => chartH - ((v - min) / range * chartH);
+        const coords = valid.map((p, i) => ({ x: i * step, y: toY(p.value), z: p.zScore ?? 0, t: p.timestamp }));
         const baseY = baseline !== null ? toY(baseline) : null;
 
         if (baseY !== null && this.config?.sparkline?.showBaseline !== false) this._baseline(baseY, baseline);
         if (baseY !== null) this._deltaFill(coords, baseY);
         this._trace(coords, stdDev);
         if (this.config?.sparkline?.showNowIndicator !== false) this._node(coords[coords.length - 1]);
+        if (showAxis) this._xAxisLabels(coords);
+        if (this.config?.sparkline?.showIncidents !== false && this.data.incidents?.length) this._incidentMarkers(coords, this.data.incidents);
+    }
+
+    _incidentMarkers(coords, incidents) {
+        this.ctx.save();
+        incidents.forEach(inc => {
+            const pt = coords[inc.pointIndex];
+            if (!pt) return;
+            const y = 5;
+            this.ctx.fillStyle = ColorTheme.getIncidentColor(inc.category, inc.magnitude);
+            this.ctx.beginPath();
+            this.ctx.moveTo(pt.x - 3, y - 4);
+            this.ctx.lineTo(pt.x + 3, y - 4);
+            this.ctx.lineTo(pt.x, y + 2);
+            this.ctx.closePath();
+            this.ctx.fill();
+        });
+        this.ctx.restore();
+    }
+
+    _xAxisLabels(coords) {
+        const n = coords.length;
+        const count = Math.max(2, Math.min(4, Math.floor(this.w / 60)));
+        const idxs = new Set([0, n - 1]);
+        for (let k = 1; k < count - 1; k++) idxs.add(Math.round(k * (n - 1) / (count - 1)));
+        const sorted = [...idxs].sort((a, b) => a - b);
+        this.ctx.save();
+        this.ctx.font = "8px sans-serif";
+        this.ctx.fillStyle = ColorTheme.ui.textSecondary;
+        this.ctx.globalAlpha = 0.7;
+        const y = this.h - 2;
+        sorted.forEach((i, k) => {
+            const pt = coords[i];
+            const d = new Date(pt.t * 1000);
+            const label = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+            this.ctx.textAlign = k === 0 ? "left" : k === sorted.length - 1 ? "right" : "center";
+            this.ctx.fillText(label, pt.x, y);
+        });
+        this.ctx.restore();
     }
 
     _colors(isAbove = false) {
