@@ -22,7 +22,9 @@
             travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
             traffic: true,          // use live traffic in routing
             avoidTolls: false,
-            avoidHighways: false
+            avoidHighways: false,
+            incidents: false,      // set true to detect/render jam, roadwork, and closure incidents on routes
+            incidentCategories: null // only applies when incidents=true; filter shown categories, e.g. ["ROAD_CLOSURE","ROAD_WORK"]; null = show all (JAM, ROAD_WORK, ROAD_CLOSURE, OTHER)
         },
 
         // Alert threshold
@@ -30,29 +32,19 @@
             critical: 1.25          // delay factor for red alert (1.25 = 25% above free-flow)
         },
 
-        // Database / history
-        database: {
-            retentionDays: 90,      // how many days of history to keep
-            cleanupOnStart: true    // purge old records on module start
-        },
-
         // Sparkline charts
         sparkline: {
             enabled: true,
             width: 160,             // canvas width (px)
-            height: 40,             // canvas height (px)
-            xAxisMode: "frequency", // "frequency" (raw measurements) | "time" (clock-aligned)
-            maxDataPoints: 50,      // max points rendered when xAxisMode="frequency"
+            height: 52,             // canvas height (px); 40 chart + 12 for x-axis labels
+            maxDataPoints: 50,      // max points rendered
             lookbackHours: 48,      // data window; auto-set to 720 in monthly view
             showBaseline: true,     // draw historical average line
             showBaselineLabel: true,// show "Avg: 34m" label on baseline
             showNowIndicator: true, // dot marking the latest measurement
+            showXAxisLabels: true,  // show HH:mm time labels under the sparkline
             showNowLabel: true,     // "Now" text next to the dot
-            showGrid: true,         // horizontal grid lines
-            gridTicks: 4,           // number of horizontal grid divisions
-            showYLabels: true,      // Y-axis value labels (e.g. "40m")
             useZScoreColors: true,  // per-segment coloring based on Z-score deviation
-            showLegend: true,       // inline legend below sparkline
             colors: {
                 critical: "#e91e63",
                 warning: "#f39c12",
