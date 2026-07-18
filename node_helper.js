@@ -98,7 +98,7 @@ module.exports = NodeHelper.create({
         const hist = Math.round(s.historicTrafficTravelTimeInSeconds / 60);
         const ntt = s.noTrafficTravelTimeInSeconds;
         const incidents = !api.incidents ? [] : (r.sections ?? [])
-            .filter(x => x.sectionType === "traffic" && x.delayInSeconds > 30)
+            .filter(x => x.sectionType === "TRAFFIC" && x.delayInSeconds > 30)
             .filter(x => !api.incidentCategories || api.incidentCategories.includes(x.simpleCategory))
             .map(({ startPointIndex, endPointIndex, magnitudeOfDelay: magnitude, simpleCategory: category, delayInSeconds: delaySeconds }) =>
                 ({ startPointIndex, endPointIndex, magnitude, category, delaySeconds }));
