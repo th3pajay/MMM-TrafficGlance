@@ -2,6 +2,7 @@ Module.register("MMM-TrafficGlance", {
     defaults: {
         updateInterval: 300000, thresholds: { critical: 1.25 },
         mapWidth: "100%", mapHeight: "220px", mapZoom: null, mapCenter: null, mapPadding: [20, 20],
+        showMapIncidentMarkers: true,
         api: { timeout: 10000, routeType: "fastest", travelMode: "car", traffic: true, avoidTolls: false, avoidHighways: false },
         sparkline: { enabled: true, width: 160, height: 40, showBaseline: true, showNowIndicator: true,
             showNowLabel: true, maxDataPoints: 50, lookbackHours: 48, showBaselineLabel: true, useZScoreColors: true,

@@ -35,6 +35,17 @@ class MapRenderer {
         this.map = this.tileLayer = this.routeLayer = this._layers = null;
     }
 
+    static _incidentLabel(inc) {
+        const mins = Math.round((inc.delaySeconds ?? 0) / 60);
+        const suffix = mins > 0 ? ` +${mins}m` : "";
+        switch (inc.category) {
+            case "ROAD_CLOSURE": return "Closure";
+            case "JAM": return `Jam${suffix}`;
+            case "ROAD_WORK": return `Roadwork${suffix}`;
+            default: return `Delay${suffix}`;
+        }
+    }
+
     draw(trafficData) {
         if (!this.map || !trafficData?.length) return;
         const allPoints = [], seen = new Set();
@@ -52,9 +63,10 @@ class MapRenderer {
             if (existing) {
                 existing.line.setLatLngs(latLngs).setStyle({ color });
                 existing.incidents.forEach(b => this.routeLayer.removeLayer(b));
+                existing.markers.forEach(m => this.routeLayer.removeLayer(m));
             } else {
                 const line = L.polyline(latLngs, { color, weight: 5, opacity: 0.9, lineJoin: 'round', lineCap: 'round' }).addTo(this.routeLayer);
-                this._layers.set(route.id, { line, latLngs, incidents: [] });
+                this._layers.set(route.id, { line, latLngs, incidents: [], markers: [] });
             }
 
             const entry = this._layers.get(route.id);
@@ -68,12 +80,22 @@ class MapRenderer {
                     dashArray: closure ? '2, 8' : s.category === 'ROAD_WORK' ? '10, 6' : null
                 }).addTo(this.routeLayer);
             });
+            entry.markers = this.config.showMapIncidentMarkers === false ? [] : (route.incidents ?? []).map(s => {
+                const seg = latLngs.slice(s.startPointIndex, s.endPointIndex + 1);
+                const pt = seg[Math.floor(seg.length / 2)] ?? seg[0];
+                if (!pt) return null;
+                return L.circleMarker(pt, {
+                    radius: 6, color: '#fff', weight: 1,
+                    fillColor: ColorTheme.getIncidentColor(s.category, s.magnitude), fillOpacity: 0.95
+                }).bindTooltip(MapRenderer._incidentLabel(s), { direction: 'top' }).addTo(this.routeLayer);
+            }).filter(Boolean);
         });
 
         for (const [id, entry] of this._layers) {
             if (!seen.has(id)) {
                 this.routeLayer.removeLayer(entry.line);
                 entry.incidents.forEach(b => this.routeLayer.removeLayer(b));
+                entry.markers.forEach(m => this.routeLayer.removeLayer(m));
                 this._layers.delete(id);
             }
         }

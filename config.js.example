@@ -14,6 +14,7 @@
         mapCenter: null,            // null = auto-fit; or [lat, lon]
         showMapScale: true,
         mapPadding: [20, 20],       // [vertical, horizontal] px when auto-fitting
+        showMapIncidentMarkers: true, // circle markers with tooltips at each incident location (requires api.incidents=true)
 
         // TomTom routing API
         api: {
