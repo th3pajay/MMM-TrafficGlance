@@ -91,7 +91,7 @@ class SparklineEngine {
         };
     }
 
-    _zColor(z) { const c = this._colors(), a = Math.abs(z); return a < 1 ? c.good : a < 2 ? c.warning : c.critical; }
+    _zColor(z) { const c = this._colors(); return z < 1 ? c.good : z < 2 ? c.warning : c.critical; }
 
     _baseline(baseY, value) {
         const c = this._colors();
