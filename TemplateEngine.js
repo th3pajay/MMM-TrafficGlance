@@ -47,16 +47,36 @@ class SparklineEngine {
         incidents.forEach(inc => {
             const pt = coords[inc.pointIndex];
             if (!pt) return;
-            const y = 5;
             this.ctx.fillStyle = ColorTheme.getIncidentColor(inc.category, inc.magnitude);
-            this.ctx.beginPath();
-            this.ctx.moveTo(pt.x - 3, y - 4);
-            this.ctx.lineTo(pt.x + 3, y - 4);
-            this.ctx.lineTo(pt.x, y + 2);
-            this.ctx.closePath();
-            this.ctx.fill();
+            this._drawIncidentShape(inc.category, pt.x, 5);
         });
         this.ctx.restore();
+    }
+
+    _drawIncidentShape(category, x, y) {
+        this.ctx.beginPath();
+        switch (category) {
+            case "ROAD_WORK":
+                this.ctx.moveTo(x, y - 4);
+                this.ctx.lineTo(x + 3, y - 1);
+                this.ctx.lineTo(x, y + 2);
+                this.ctx.lineTo(x - 3, y - 1);
+                this.ctx.closePath();
+                break;
+            case "ROAD_CLOSURE":
+                this.ctx.rect(x - 3, y - 4, 6, 6);
+                break;
+            case "JAM":
+                this.ctx.moveTo(x - 3, y - 4);
+                this.ctx.lineTo(x + 3, y - 4);
+                this.ctx.lineTo(x, y + 2);
+                this.ctx.closePath();
+                break;
+            default:
+                this.ctx.arc(x, y - 1, 2.5, 0, Math.PI * 2);
+                break;
+        }
+        this.ctx.fill();
     }
 
     _xAxisLabels(coords) {
@@ -113,13 +133,60 @@ class SparklineEngine {
         this.ctx.restore();
     }
 
+    _lineStyle() {
+        const style = this.config?.sparkline?.lineStyle;
+        return style === "curved" || style === "stepped" ? style : "linear";
+    }
+
+    _drawSegment(p0, p1, style) {
+        if (style === "stepped") {
+            this.ctx.lineTo(p1.x, p0.y);
+            this.ctx.lineTo(p1.x, p1.y);
+        } else {
+            this.ctx.lineTo(p1.x, p1.y);
+        }
+    }
+
+    _tracePath(coords, style) {
+        const n = coords.length;
+        if (style === "curved") {
+            for (let i = 1; i < n - 1; i++) {
+                const xc = (coords[i].x + coords[i + 1].x) / 2, yc = (coords[i].y + coords[i + 1].y) / 2;
+                this.ctx.quadraticCurveTo(coords[i].x, coords[i].y, xc, yc);
+            }
+            if (n > 1) this.ctx.quadraticCurveTo(coords[n - 2].x, coords[n - 2].y, coords[n - 1].x, coords[n - 1].y);
+        } else {
+            for (let i = 1; i < n; i++) this._drawSegment(coords[i - 1], coords[i], style);
+        }
+    }
+
+    _traceCurvedColored(coords) {
+        const n = coords.length;
+        let prev = coords[0];
+        for (let i = 1; i < n - 1; i++) {
+            const end = { x: (coords[i].x + coords[i + 1].x) / 2, y: (coords[i].y + coords[i + 1].y) / 2 };
+            this.ctx.beginPath();
+            this.ctx.strokeStyle = this._zColor((coords[i - 1].z + coords[i].z) / 2);
+            this.ctx.moveTo(prev.x, prev.y);
+            this.ctx.quadraticCurveTo(coords[i].x, coords[i].y, end.x, end.y);
+            this.ctx.stroke();
+            prev = end;
+        }
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = this._zColor((coords[n - 2].z + coords[n - 1].z) / 2);
+        this.ctx.moveTo(prev.x, prev.y);
+        this.ctx.quadraticCurveTo(coords[n - 2].x, coords[n - 2].y, coords[n - 1].x, coords[n - 1].y);
+        this.ctx.stroke();
+    }
+
     _deltaFill(coords, baseY) {
         if (coords.length < 2) return;
         const isAbove = coords[coords.length - 1].y < baseY;
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.moveTo(coords[0].x, baseY);
-        coords.forEach(p => this.ctx.lineTo(p.x, p.y));
+        this.ctx.lineTo(coords[0].x, coords[0].y);
+        this._tracePath(coords, this._lineStyle());
         this.ctx.lineTo(coords[coords.length - 1].x, baseY);
         this.ctx.closePath();
         this.ctx.fillStyle = ColorTheme.hexToRgba(this._colors(isAbove).line, 0.15);
@@ -129,23 +196,29 @@ class SparklineEngine {
 
     _trace(coords, stdDev) {
         if (coords.length < 2) return;
+        const style = this._lineStyle();
         this.ctx.save();
         this.ctx.lineWidth = 1.5;
         this.ctx.lineJoin = "round";
         this.ctx.lineCap = "round";
         if (this.config?.sparkline?.useZScoreColors !== false && stdDev > 0) {
-            for (let i = 1; i < coords.length; i++) {
-                this.ctx.beginPath();
-                this.ctx.strokeStyle = this._zColor((coords[i - 1].z + coords[i].z) / 2);
-                this.ctx.moveTo(coords[i - 1].x, coords[i - 1].y);
-                this.ctx.lineTo(coords[i].x, coords[i].y);
-                this.ctx.stroke();
+            if (style === "curved") {
+                this._traceCurvedColored(coords);
+            } else {
+                for (let i = 1; i < coords.length; i++) {
+                    this.ctx.beginPath();
+                    this.ctx.strokeStyle = this._zColor((coords[i - 1].z + coords[i].z) / 2);
+                    this.ctx.moveTo(coords[i - 1].x, coords[i - 1].y);
+                    this._drawSegment(coords[i - 1], coords[i], style);
+                    this.ctx.stroke();
+                }
             }
         } else {
             const last = coords[coords.length - 1];
             this.ctx.strokeStyle = this._colors(last.y < this.h / 2).line;
             this.ctx.beginPath();
-            coords.forEach((p, i) => i === 0 ? this.ctx.moveTo(p.x, p.y) : this.ctx.lineTo(p.x, p.y));
+            this.ctx.moveTo(coords[0].x, coords[0].y);
+            this._tracePath(coords, style);
             this.ctx.stroke();
         }
         this.ctx.restore();

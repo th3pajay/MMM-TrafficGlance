@@ -3,7 +3,7 @@
 Real-time traffic monitoring module for MagicMirror² with TomTom integration, historical sparkline analysis, and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.1.23-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.25-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -142,6 +142,7 @@ No `npm install` — zero dependencies.
 | `showNowLabel` | `true` | "NOW" label next to the dot |
 | `useZScoreColors` | `true` | Color segments by Z-score deviation |
 | `showXAxisLabels` | `true` | Show `HH:mm` time labels under the sparkline (reserves 12px of the canvas height) |
+| `lineStyle` | `"linear"` | Line shape: `"linear"` (straight segments), `"curved"` (smooth curve), `"stepped"` (blocky step line) |
 | `colors` | `{}` | Override sparkline colors, e.g. `{ critical, warning, good, baseline }`; falls back to `ColorTheme.traffic` colors when unset |
 
 **`routes[]`**

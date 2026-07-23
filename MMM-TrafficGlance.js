@@ -6,7 +6,7 @@ Module.register("MMM-TrafficGlance", {
         api: { timeout: 10000, routeType: "fastest", travelMode: "car", traffic: true, avoidTolls: false, avoidHighways: false },
         sparkline: { enabled: true, width: 160, height: 40, showBaseline: true, showNowIndicator: true,
             showNowLabel: true, maxDataPoints: 50, lookbackHours: 48, showBaselineLabel: true, useZScoreColors: true,
-            showXAxisLabels: true, showIncidents: true }
+            showXAxisLabels: true, showIncidents: true, lineStyle: "linear" }
     },
 
     getStyles: () => ["MMM-TrafficGlance.css", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"],

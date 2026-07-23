@@ -46,6 +46,7 @@
             showXAxisLabels: true,  // show HH:mm time labels under the sparkline
             showNowLabel: true,     // "Now" text next to the dot
             useZScoreColors: true,  // per-segment coloring based on Z-score deviation
+            lineStyle: "linear",    // line shape: "linear" (straight), "curved" (smooth), "stepped" (blocky)
             colors: {
                 critical: "#e91e63",
                 warning: "#f39c12",
