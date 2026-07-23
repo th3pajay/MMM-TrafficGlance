@@ -3,7 +3,7 @@
 Real-time traffic monitoring module for MagicMirror² with TomTom integration, historical sparkline analysis, and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.1.25-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.26-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 

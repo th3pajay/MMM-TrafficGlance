@@ -5,10 +5,10 @@ class MapRenderer {
         this.config = config;
         this._layers = new Map();
         this.map = L.map(containerId, {
-            zoomControl: false,
+            zoomControl: true,
             attributionControl: false,
             dragging: false,
-            scrollWheelZoom: false,
+            scrollWheelZoom: true,
             touchZoom: false
         });
         this.routeLayer = L.layerGroup().addTo(this.map);
