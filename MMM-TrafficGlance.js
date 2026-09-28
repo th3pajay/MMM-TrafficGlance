@@ -3,6 +3,8 @@ Module.register("MMM-TrafficGlance", {
         updateInterval: 300000, thresholds: { critical: 1.25 },
         mapWidth: "100%", mapHeight: "220px", mapZoom: null, mapCenter: null, mapPadding: [20, 20],
         showMapIncidentMarkers: true,
+        map: { zoomControlSize: 22 },
+
         api: { timeout: 10000, routeType: "fastest", travelMode: "car", traffic: true, avoidTolls: false, avoidHighways: false },
         sparkline: { enabled: true, width: 160, height: 40, showBaseline: true, showNowIndicator: true,
             showNowLabel: true, maxDataPoints: 50, lookbackHours: 48, showBaselineLabel: true, useZScoreColors: true,
@@ -28,8 +30,12 @@ Module.register("MMM-TrafficGlance", {
         } else if (notification === "QUOTA_EXHAUSTED" || notification === "QUOTA_RESTORED") {
             this._quotaExhausted = notification === "QUOTA_EXHAUSTED";
             if (this._quotaExhausted) this._nextReset = payload.nextResetTime;
-            if (this._mapEngine) { this._mapEngine.destroy(); this._mapEngine = null; }
-            this._wrapper = null; this._mapReady = false;
+            if (this._mapReady && this._mapEngine) {
+                this._mapEngine.setFlowOverlay(this._quotaExhausted);
+            } else {
+                if (this._mapEngine) { this._mapEngine.destroy(); this._mapEngine = null; }
+                this._wrapper = null; this._mapReady = false;
+            }
             this.updateDom();
         } else if (notification === "FETCH_ERROR") {
             this._fetchError = payload.category;
@@ -128,7 +134,10 @@ Module.register("MMM-TrafficGlance", {
         if (this._mapEngine) { this._mapEngine.destroy(); this._mapEngine = null; }
         this._mapEngine = new MapRenderer("traffic-map-container", this.config);
         if (this.trafficData.length) { this._mapEngine.draw(this.trafficData); this._mapEngine.map.invalidateSize(); }
-        else if (this._quotaExhausted) this._mapEngine.map.setView(this.config.mapCenter || [47.3, 19.1], this.config.mapZoom || 10);
+        else if (this._quotaExhausted) {
+            this._mapEngine.map.setView(this.config.mapCenter || [47.3, 19.1], this.config.mapZoom || 10);
+            this._mapEngine.setFlowOverlay(true);
+        }
         this._mapReady = true;
         this._initMapPending = false;
     }

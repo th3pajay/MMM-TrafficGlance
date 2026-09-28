@@ -3,7 +3,7 @@
 Real-time traffic monitoring module for MagicMirror² with TomTom integration, historical sparkline analysis, and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.1.26-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.32-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -52,6 +52,10 @@ No `npm install` — zero dependencies.
         mapZoom: null,        // null = auto-fit to routes
         mapCenter: null,      // null = auto-fit; or [lat, lon]
         mapPadding: [20, 20],
+
+        map: {
+            zoomControlSize: 22    // px; size of the +/- zoom buttons
+        },
 
         api: {
             timeout: 10000,         // request timeout (ms)
@@ -107,6 +111,12 @@ No `npm install` — zero dependencies.
 | `mapZoom` | `null` | Fixed zoom 1–19, or `null` for auto-fit |
 | `mapCenter` | `null` | Fixed `[lat, lon]`, or `null` for auto-fit |
 | `mapPadding` | `[20, 20]` | Auto-fit padding `[vertical, horizontal]` px |
+
+**`map`**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `zoomControlSize` | `22` | Pixel size of the map's +/- zoom buttons (Leaflet default is 30) |
 
 **`api`**
 

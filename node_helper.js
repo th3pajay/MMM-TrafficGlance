@@ -1,6 +1,7 @@
 const NodeHelper = require("node_helper");
 // node:sqlite requires Node >=22.5; add --experimental-sqlite to MM start cmd if on Node 22.5-22.10
 const { DatabaseSync } = require("node:sqlite");
+const { resolvePacedIntervalMs, startOfUtcMonth } = require("./quotaPacing");
 
 module.exports = NodeHelper.create({
     start() {
@@ -11,7 +12,7 @@ module.exports = NodeHelper.create({
     },
 
     stop() {
-        if (this.intervalId) clearInterval(this.intervalId);
+        if (this.intervalId) clearTimeout(this.intervalId);
         if (this._midnightId) clearInterval(this._midnightId);
         this.db?.close?.();
     },
@@ -32,6 +33,7 @@ module.exports = NodeHelper.create({
         this._sel = this.db.prepare("SELECT travel_time,timestamp FROM traffic_history WHERE route_id=? AND timestamp>=? ORDER BY timestamp DESC LIMIT ?");
         this._insIncident = this.db.prepare("INSERT INTO incident_history VALUES(?,?,?,?,?)");
         this._selIncident = this.db.prepare("SELECT timestamp,category,magnitude FROM incident_history WHERE route_id=? AND timestamp>=? ORDER BY timestamp");
+        this._selCallsThisMonth = this.db.prepare("SELECT COUNT(*) n FROM traffic_history WHERE timestamp>=?");
     },
 
     _sparkline(routeId) {
@@ -83,7 +85,9 @@ module.exports = NodeHelper.create({
         if (res.status === 429) throw Object.assign(new Error("quota"), { quota: true });
         if (res.status === 403) {
             const body = await res.json().catch(() => ({}));
-            if (body?.detailedError?.code === "APP_QUOTA_EXCEEDED") throw Object.assign(new Error("quota"), { quota: true });
+            const code = body?.detailedError?.code;
+            if (code === "APP_QUOTA_EXCEEDED" || code === "InsufficientFunds") throw Object.assign(new Error("quota"), { quota: true });
+            console.warn(`[MMM-TrafficGlance] unrecognized 403 for route "${route.id ?? route.name}":`, JSON.stringify(body));
             throw Object.assign(new Error("auth"), { auth: true });
         }
         if (!res.ok) throw new Error(res.statusText);
@@ -129,21 +133,26 @@ module.exports = NodeHelper.create({
             this._lastCleanup = now;
         }
         try {
-            const results = await Promise.all(
-                this.config.routes.map(r => this._fetch(r).catch(e => {
+            const routes = [];
+            for (const [i, r] of this.config.routes.entries()) {
+                // Serialised with a gap between calls to stay under TomTom's QPS limit.
+                if (i > 0) await new Promise(res => setTimeout(res, 300));
+                const data = await this._fetch(r).catch(e => {
                     if (e.quota || e.auth) throw e;
                     console.warn(`[MMM-TrafficGlance] fetch failed for route "${r.id ?? r.name}":`, e.message);
                     return null;
-                }))
-            );
-            const routes = results.filter(Boolean);
+                });
+                if (data) routes.push(data);
+            }
             this.sendSocketNotification(routes.length ? "TRAFFIC_UPDATE" : "FETCH_ERROR",
                 routes.length ? routes : { category: "network" });
         } catch (e) {
             if (e.auth) {
+                console.warn("[MMM-TrafficGlance] auth error, giving up until config changes");
                 this.sendSocketNotification("FETCH_ERROR", { category: "auth" });
                 return;
             }
+            console.warn("[MMM-TrafficGlance] quota exhausted");
             this.quotaExhausted = true;
             const m = new Date(); m.setUTCHours(24, 0, 0, 0);
             this.nextMidnightUTC = m.getTime();
@@ -159,13 +168,27 @@ module.exports = NodeHelper.create({
         } finally { this._busy = false; }
     },
 
+    _nextIntervalMs() {
+        const configured = Math.max(60000, this.config.updateInterval ?? 300000);
+        const routesCount = Array.isArray(this.config.routes) ? this.config.routes.length : 0;
+        if (!this.db || !routesCount) return configured;
+        const now = Date.now();
+        const monthStart = Math.floor(startOfUtcMonth(new Date(now)) / 1000);
+        const callsThisMonth = this._selCallsThisMonth.get(monthStart).n;
+        const paced = resolvePacedIntervalMs(this.config.api, { routesCount, callsThisMonth, now, configuredIntervalMs: configured });
+        return paced === null ? configured : Math.round(paced);
+    },
+
+    async _runLoop() {
+        await this._update();
+        this.intervalId = setTimeout(() => this._runLoop(), this._nextIntervalMs());
+    },
+
     socketNotificationReceived(notification, payload) {
         if (notification !== "CONFIG") return;
-        if (this.intervalId) clearInterval(this.intervalId);
+        if (this.intervalId) clearTimeout(this.intervalId);
         this.config = payload;
         if (!this.db) try { this._initDb(); } catch { this.db = null; }
-        this._update();
-        const interval = Math.max(60000, this.config.updateInterval ?? 300000);
-        this.intervalId = setInterval(() => this._update(), interval);
+        this._runLoop();
     }
 });

@@ -4,6 +4,11 @@ class MapRenderer {
     constructor(containerId, config) {
         this.config = config;
         this._layers = new Map();
+        const zcs = this.config.map && this.config.map.zoomControlSize;
+        if (typeof zcs === "number" && zcs > 0) {
+            const el = document.getElementById(containerId);
+            if (el) el.style.setProperty("--tg-zoom-size", zcs + "px");
+        }
         this.map = L.map(containerId, {
             zoomControl: true,
             attributionControl: false,
@@ -12,27 +17,28 @@ class MapRenderer {
             touchZoom: false
         });
         this.routeLayer = L.layerGroup().addTo(this.map);
-        this.initTiles();
-    }
-
-    initTiles() {
-        this.switchTileLayer(false);
+        this.tileLayer = L.tileLayer(MapRenderer.CARTO, { maxZoom: 19 }).addTo(this.map);
+        this.flowLayer = null;
         if (this.config.showMapScale !== false)
             L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(this.map);
     }
 
-    switchTileLayer(useTomTom) {
-        this.tileLayer && this.map.removeLayer(this.tileLayer);
-        const url = useTomTom
-            ? `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${this.config.apiKey}`
-            : MapRenderer.CARTO;
-        this.tileLayer = L.tileLayer(url, { maxZoom: 19 }).addTo(this.map);
+    setFlowOverlay(enabled) {
+        if (enabled && !this.flowLayer) {
+            this.flowLayer = L.tileLayer(
+                `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${this.config.apiKey}`,
+                { maxZoom: 19, opacity: 0.7 }
+            ).addTo(this.map);
+        } else if (!enabled && this.flowLayer) {
+            this.map.removeLayer(this.flowLayer);
+            this.flowLayer = null;
+        }
     }
 
     destroy() {
         this._layers?.clear();
         this.map?.remove();
-        this.map = this.tileLayer = this.routeLayer = this._layers = null;
+        this.map = this.tileLayer = this.flowLayer = this.routeLayer = this._layers = null;
     }
 
     static _incidentLabel(inc) {
