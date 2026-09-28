@@ -16,8 +16,20 @@
         mapPadding: [20, 20],       // [vertical, horizontal] px when auto-fitting
         showMapIncidentMarkers: true, // circle markers with tooltips at each incident location (requires api.incidents=true)
 
+        // Map controls
+        map: {
+            zoomControlSize: 22     // px; size of the +/- zoom buttons (Leaflet default is 30)
+        },
+
         // TomTom routing API
         api: {
+            adaptivePacing: true,   // default: stretch polling to spread monthlyQuota across the
+                                    // rest of the UTC calendar month so updateInterval can't
+                                    // exhaust it early. updateInterval is always the floor -
+                                    // pacing only slows polling down, never speeds it up.
+                                    // Set to false to always poll at exactly updateInterval.
+            monthlyQuota: 20000,    // your Routing API monthly call allowance (used only when
+                                    // adaptivePacing is true)
             timeout: 10000,         // request timeout (ms)
             routeType: "fastest",   // "fastest" | "shortest" | "eco" | "thrilling"
             travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
@@ -46,6 +58,7 @@
             showXAxisLabels: true,  // show HH:mm time labels under the sparkline
             showNowLabel: true,     // "Now" text next to the dot
             useZScoreColors: true,  // per-segment coloring based on Z-score deviation
+            lineStyle: "linear",    // line shape: "linear" (straight), "curved" (smooth), "stepped" (blocky)
             colors: {
                 critical: "#e91e63",
                 warning: "#f39c12",
