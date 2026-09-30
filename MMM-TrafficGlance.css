@@ -86,3 +86,13 @@
         }
     }
 }
+
+.tg-osm-dark {
+    filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
+}
+.leaflet-control-attribution {
+    background: rgba(0, 0, 0, 0.5) !important;
+    color: #999 !important;
+    font-size: 9px !important;
+}
+.leaflet-control-attribution a { color: #aaa !important; }

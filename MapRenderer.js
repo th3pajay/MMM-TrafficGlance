@@ -1,5 +1,5 @@
 class MapRenderer {
-    static CARTO = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    static OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
     constructor(containerId, config) {
         this.config = config;
@@ -11,13 +11,17 @@ class MapRenderer {
         }
         this.map = L.map(containerId, {
             zoomControl: true,
-            attributionControl: false,
+            attributionControl: true,
             dragging: false,
             scrollWheelZoom: true,
             touchZoom: false
         });
         this.routeLayer = L.layerGroup().addTo(this.map);
-        this.tileLayer = L.tileLayer(MapRenderer.CARTO, { maxZoom: 19 }).addTo(this.map);
+        this.tileLayer = L.tileLayer(MapRenderer.OSM, {
+            maxZoom: 19,
+            className: 'tg-osm-dark',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(this.map);
         this.flowLayer = null;
         if (this.config.showMapScale !== false)
             L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(this.map);
