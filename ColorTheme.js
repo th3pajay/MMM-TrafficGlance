@@ -25,21 +25,22 @@ var ColorTheme = {
         return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
     },
 
-    getRouteColorClass: function(route, criticalThreshold) {
-        var threshold = criticalThreshold != null ? criticalThreshold : 1.25;
+    getRouteColorClass: function(route, thresholds) {
+        var threshold = thresholds && thresholds.critical != null ? thresholds.critical : 1.25;
+        var warningPct = thresholds && thresholds.warning != null ? thresholds.warning : 1;
         if (route.historicalAverage != null && route.historicalAverage > 0) {
             var pct = ((route.currentDuration - route.historicalAverage) / route.historicalAverage) * 100;
             var criticalPct = (threshold - 1) * 100;
             if (pct > criticalPct) return 'red';
-            if (pct >= 1) return 'yellow';
+            if (pct >= warningPct) return 'yellow';
             return 'green';
         }
         if (route.delayFactor != null && route.delayFactor >= threshold) return 'red';
         return 'green';
     },
 
-    getRouteColor: function(route, criticalThreshold) {
-        var cls = this.getRouteColorClass(route, criticalThreshold);
+    getRouteColor: function(route, thresholds) {
+        var cls = this.getRouteColorClass(route, thresholds);
         return { green: this.traffic.good, yellow: this.traffic.warning, red: this.traffic.criticalAlt }[cls];
     },
 

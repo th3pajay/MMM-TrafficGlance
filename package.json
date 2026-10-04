@@ -1,12 +1,12 @@
 {
   "name": "MMM-TrafficGlance",
-  "version": "1.1.33",
+  "version": "1.1.35",
   "description": "High-density traffic visualization with historical trend analysis and satellite map overlays.",
   "main": "MMM-TrafficGlance.js",
   "scripts": {
     "test": "node --test"
   },
-  "keywords": ["magicmirror", "module", "traffic", "tomtom", "performance"],
+  "keywords": ["magicmirror", "module", "traffic", "tomtom", "openstreetmap", "planning"],
   "author": "th3pajay",
   "license": "MIT",
   "dependencies": {}

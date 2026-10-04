@@ -3,7 +3,7 @@
 Real-time traffic monitoring module for MagicMirror² with TomTom integration, historical sparkline analysis, and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.1.33-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.35-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -47,14 +47,24 @@ No `npm install` — zero dependencies.
     config: {
         apiKey: "YOUR_TOMTOM_API_KEY",
         updateInterval: 300000,
+        maxWidth: null,
 
-        mapHeight: "220px",
-        mapZoom: null,        // null = auto-fit to routes
-        mapCenter: null,      // null = auto-fit; or [lat, lon]
-        mapPadding: [20, 20],
+        display: {
+            showDelta: true,
+            showTrend: true,
+            showMap: true
+        },
 
         map: {
-            zoomControlSize: 22    // px; size of the +/- zoom buttons
+            width: "100%",
+            height: "220px",
+            zoom: null,            // null = auto-fit to routes
+            center: null,          // null = auto-fit; or [lat, lon]
+            padding: [20, 20],
+            tileProvider: "osm",   // "osm" | "osmfr" | "tomtom"
+            zoomControlSize: 22,   // px; size of the +/- zoom buttons
+            showScale: true,
+            showIncidentMarkers: true
         },
 
         api: {
@@ -62,13 +72,13 @@ No `npm install` — zero dependencies.
             routeType: "fastest",   // "fastest" | "shortest" | "eco" | "thrilling"
             travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
             traffic: true,
-            avoidTolls: false,
-            avoidHighways: false,
+            avoid: [],              // "tollRoads" | "motorways" | "ferries" | "unpavedRoads" | "carpools" | "alreadyUsedRoads"
             incidents: false,      // set true to detect jam/roadwork/closure incidents
             incidentCategories: null // e.g. ["ROAD_CLOSURE","ROAD_WORK"]; null = show all
         },
 
         thresholds: {
+            warning: 1,             // percent above historical average where yellow starts
             critical: 1.25          // delay factor for red alert (1.25 = 25% above free-flow)
         },
 
@@ -84,19 +94,25 @@ No `npm install` — zero dependencies.
             {
                 id: "commute",
                 name: "Work",
-                origin: "47.5148,19.0777",
-                destination: "47.2309,18.6081"
+                origin: "48.8584,2.2945",
+                destination: "48.8606,2.3376"
             },
             {
                 id: "home",
                 name: "Home",
-                origin: "47.2309,18.6081",
-                destination: "47.5148,19.0777"
+                origin: "48.8606,2.3376",
+                destination: "48.8584,2.2945"
             }
         ]
     }
 }
 ```
+
+## Settings page
+
+The small hamburger button at the bottom-left of the module opens a settings popup with every option except `apiKey`. Values are read from this module's entry in `config/config.js` and saved back to it in place, so comments and formatting are kept (a changed `routes` list is rewritten as a whole). The previous file is copied to `config.js.bak` first. After saving, restart MagicMirror (e.g. `pm2 restart MagicMirror`) to apply the changes.
+
+If the module's entry in `config.js` can't be parsed (for example it uses variables or functions), the popup shows `Settings cannot be parsed, please check manually.` and nothing is edited.
 
 ## Options Reference
 
@@ -106,17 +122,29 @@ No `npm install` — zero dependencies.
 |--------|---------|-------------|
 | `apiKey` | **required** | TomTom API key |
 | `updateInterval` | `300000` | Refresh interval (ms) |
-| `mapWidth` | `"100%"` | Map container width |
-| `mapHeight` | `"220px"` | Map container height |
-| `mapZoom` | `null` | Fixed zoom 1–19, or `null` for auto-fit |
-| `mapCenter` | `null` | Fixed `[lat, lon]`, or `null` for auto-fit |
-| `mapPadding` | `[20, 20]` | Auto-fit padding `[vertical, horizontal]` px |
+| `maxWidth` | `null` | Maximum module width (CSS value, e.g. `"350px"`), or `null` for no limit |
+
+**`display`**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `showDelta` | `true` | Show the difference vs historical average (e.g. `+2m`) |
+| `showTrend` | `true` | Show the up/down/stable trend arrow |
+| `showMap` | `true` | Show the route map |
 
 **`map`**
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `width` | `"100%"` | Map container width |
+| `height` | `"220px"` | Map container height |
+| `zoom` | `null` | Fixed zoom 1–19, or `null` for auto-fit |
+| `center` | `null` | Fixed `[lat, lon]`, or `null` for auto-fit |
+| `padding` | `[20, 20]` | Auto-fit padding `[vertical, horizontal]` px |
+| `showScale` | `true` | Show the distance scale bar |
+| `showIncidentMarkers` | `true` | Circle markers with tooltips at each incident location (requires `api.incidents`) |
 | `zoomControlSize` | `22` | Pixel size of the map's +/- zoom buttons (Leaflet default is 30) |
+| `tileProvider` | `"osm"` | Base map tiles: `"osm"` (OpenStreetMap standard), `"osmfr"` (OpenStreetMap France HOT), or `"tomtom"` (TomTom night style, uses your `apiKey`) |
 
 **`api`**
 
@@ -126,8 +154,7 @@ No `npm install` — zero dependencies.
 | `routeType` | `"fastest"` | `"fastest"` \| `"shortest"` \| `"eco"` \| `"thrilling"` |
 | `travelMode` | `"car"` | `"car"` \| `"truck"` \| `"taxi"` \| `"bus"` \| `"pedestrian"` \| `"bicycle"` |
 | `traffic` | `true` | Include live traffic in routing |
-| `avoidTolls` | `false` | Avoid toll roads |
-| `avoidHighways` | `false` | Avoid motorways |
+| `avoid` | `[]` | Road types to avoid: `"tollRoads"`, `"motorways"`, `"ferries"`, `"unpavedRoads"`, `"carpools"`, `"alreadyUsedRoads"` |
 | `incidents` | `false` | Detect and render jam/roadwork/closure incidents on routes |
 | `incidentCategories` | `null` | Only applies when `incidents` is `true`; filter to these categories, e.g. `["ROAD_CLOSURE","ROAD_WORK"]`; `null` shows all (`JAM`, `ROAD_WORK`, `ROAD_CLOSURE`, `OTHER`) |
 
@@ -135,6 +162,7 @@ No `npm install` — zero dependencies.
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `warning` | `1` | Percent above historical average where yellow starts |
 | `critical` | `1.25` | Delay factor that triggers red (1.25 = 25% above free-flow) |
 
 **`sparkline`**
@@ -150,6 +178,7 @@ No `npm install` — zero dependencies.
 | `showBaselineLabel` | `true` | Show "Avg: 34m" label |
 | `showNowIndicator` | `true` | Dot at latest measurement |
 | `showNowLabel` | `true` | "NOW" label next to the dot |
+| `showIncidents` | `true` | Incident shape markers along the sparkline (requires `api.incidents`) |
 | `useZScoreColors` | `true` | Color segments by Z-score deviation |
 | `showXAxisLabels` | `true` | Show `HH:mm` time labels under the sparkline (reserves 12px of the canvas height) |
 | `lineStyle` | `"linear"` | Line shape: `"linear"` (straight segments), `"curved"` (smooth curve), `"stepped"` (blocky step line) |
