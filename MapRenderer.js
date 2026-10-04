@@ -1,5 +1,10 @@
 class MapRenderer {
-    static OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    static OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    static PROVIDERS = {
+        osm: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, className: 'tg-osm-dark', attribution: MapRenderer.OSM_ATTRIBUTION },
+        osmfr: { url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', maxZoom: 19, className: 'tg-osm-dark', attribution: MapRenderer.OSM_ATTRIBUTION },
+        tomtom: { url: 'https://api.tomtom.com/map/1/tile/basic/night/{z}/{x}/{y}.png?key={key}', maxZoom: 22, attribution: '&copy; <a href="https://www.tomtom.com">TomTom</a>' }
+    };
 
     constructor(containerId, config) {
         this.config = config;
@@ -17,13 +22,14 @@ class MapRenderer {
             touchZoom: false
         });
         this.routeLayer = L.layerGroup().addTo(this.map);
-        this.tileLayer = L.tileLayer(MapRenderer.OSM, {
-            maxZoom: 19,
-            className: 'tg-osm-dark',
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        const { url, ...tileOptions } = MapRenderer.PROVIDERS[this.config.map?.tileProvider] ?? MapRenderer.PROVIDERS.osm;
+        this.tileLayer = L.tileLayer(url, {
+            ...tileOptions,
+            key: this.config.apiKey,
+            referrerPolicy: 'strict-origin-when-cross-origin'
         }).addTo(this.map);
         this.flowLayer = null;
-        if (this.config.showMapScale !== false)
+        if (this.config.map.showScale !== false)
             L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(this.map);
     }
 
@@ -62,7 +68,7 @@ class MapRenderer {
 
         trafficData.forEach(route => {
             seen.add(route.id);
-            const color = ColorTheme.getRouteColor(route, this.config.thresholds?.critical);
+            const color = ColorTheme.getRouteColor(route, this.config.thresholds);
             const latLngs = route.polyline
                 ? route.polyline.map(p => [p.latitude, p.longitude])
                 : this._layers.get(route.id)?.latLngs ?? [];
@@ -90,7 +96,7 @@ class MapRenderer {
                     dashArray: closure ? '2, 8' : s.category === 'ROAD_WORK' ? '10, 6' : null
                 }).addTo(this.routeLayer);
             });
-            entry.markers = this.config.showMapIncidentMarkers === false ? [] : (route.incidents ?? []).map(s => {
+            entry.markers = this.config.map.showIncidentMarkers === false ? [] : (route.incidents ?? []).map(s => {
                 const seg = latLngs.slice(s.startPointIndex, s.endPointIndex + 1);
                 const pt = seg[Math.floor(seg.length / 2)] ?? seg[0];
                 if (!pt) return null;
@@ -110,6 +116,6 @@ class MapRenderer {
             }
         }
 
-        if (allPoints.length) this.map.fitBounds(L.latLngBounds(allPoints), { padding: this.config.mapPadding || [20, 20] });
+        if (allPoints.length) this.map.fitBounds(L.latLngBounds(allPoints), { padding: this.config.map.padding || [20, 20] });
     }
 }

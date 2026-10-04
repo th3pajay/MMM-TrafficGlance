@@ -5,20 +5,26 @@
     config: {
         apiKey: "YOUR_TOMTOM_API_KEY_HERE",
         updateInterval: 300000,
-        maxWidth: "350px",
+        maxWidth: "350px",          // null = no limit
 
-        // Map display
-        mapWidth: "100%",
-        mapHeight: "220px",
-        mapZoom: null,              // null = auto-fit to routes
-        mapCenter: null,            // null = auto-fit; or [lat, lon]
-        showMapScale: true,
-        mapPadding: [20, 20],       // [vertical, horizontal] px when auto-fitting
-        showMapIncidentMarkers: true, // circle markers with tooltips at each incident location (requires api.incidents=true)
+        // Display
+        display: {
+            showDelta: true,        // "+2m" difference vs historical average
+            showTrend: true,        // up/down/stable arrow
+            showMap: true
+        },
 
-        // Map controls
+        // Map
         map: {
-            zoomControlSize: 22     // px; size of the +/- zoom buttons (Leaflet default is 30)
+            width: "100%",
+            height: "220px",
+            zoom: null,                 // null = auto-fit to routes
+            center: null,               // null = auto-fit; or [lat, lon]
+            padding: [20, 20],          // [vertical, horizontal] px when auto-fitting
+            tileProvider: "osm",        // "osm" (OpenStreetMap) | "osmfr" (OpenStreetMap France HOT) | "tomtom" (night style, uses apiKey)
+            zoomControlSize: 22,        // px; size of the +/- zoom buttons (Leaflet default is 30)
+            showScale: true,
+            showIncidentMarkers: true   // circle markers with tooltips at each incident location (requires api.incidents=true)
         },
 
         // TomTom routing API
@@ -34,14 +40,14 @@
             routeType: "fastest",   // "fastest" | "shortest" | "eco" | "thrilling"
             travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
             traffic: true,          // use live traffic in routing
-            avoidTolls: false,
-            avoidHighways: false,
+            avoid: [],              // "tollRoads" | "motorways" | "ferries" | "unpavedRoads" | "carpools" | "alreadyUsedRoads"
             incidents: false,      // set true to detect/render jam, roadwork, and closure incidents on routes
             incidentCategories: null // only applies when incidents=true; filter shown categories, e.g. ["ROAD_CLOSURE","ROAD_WORK"]; null = show all (JAM, ROAD_WORK, ROAD_CLOSURE, OTHER)
         },
 
-        // Alert threshold
+        // Alert thresholds
         thresholds: {
+            warning: 1,             // percent above historical average where yellow starts
             critical: 1.25          // delay factor for red alert (1.25 = 25% above free-flow)
         },
 
@@ -57,13 +63,13 @@
             showNowIndicator: true, // dot marking the latest measurement
             showXAxisLabels: true,  // show HH:mm time labels under the sparkline
             showNowLabel: true,     // "Now" text next to the dot
+            showIncidents: true,    // incident shape markers along the sparkline (requires api.incidents=true)
             useZScoreColors: true,  // per-segment coloring based on Z-score deviation
             lineStyle: "linear",    // line shape: "linear" (straight), "curved" (smooth), "stepped" (blocky)
             colors: {
                 critical: "#e91e63",
                 warning: "#f39c12",
                 good: "#2ecc71",
-                neutral: "#4fc3f7",
                 baseline: "#888888"
             }
         },
@@ -72,14 +78,14 @@
             {
                 id: "morning-commute",
                 name: "Work",
-                origin: "47.5148,19.0777",
-                destination: "47.2309,18.6081"
+                origin: "48.8584,2.2945",
+                destination: "48.8606,2.3376"
             },
             {
                id: "evening-route",
                name: "Home",
-               origin: "47.2309,18.6081",
-               destination: "47.5148,19.0777"
+               origin: "48.8606,2.3376",
+               destination: "48.8584,2.2945"
            }
         ]
     }

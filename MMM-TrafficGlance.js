@@ -1,20 +1,24 @@
 Module.register("MMM-TrafficGlance", {
     defaults: {
-        updateInterval: 300000, thresholds: { critical: 1.25 },
-        mapWidth: "100%", mapHeight: "220px", mapZoom: null, mapCenter: null, mapPadding: [20, 20],
-        showMapIncidentMarkers: true,
-        map: { zoomControlSize: 22 },
+        updateInterval: 300000, maxWidth: null, thresholds: { warning: 1, critical: 1.25 },
+        display: { showDelta: true, showTrend: true, showMap: true },
+        map: { width: "100%", height: "220px", zoom: null, center: null, padding: [20, 20],
+            tileProvider: "osm", zoomControlSize: 22, showScale: true, showIncidentMarkers: true },
 
-        api: { timeout: 10000, routeType: "fastest", travelMode: "car", traffic: true, avoidTolls: false, avoidHighways: false },
+        api: { timeout: 10000, routeType: "fastest", travelMode: "car", traffic: true, avoid: [] },
         sparkline: { enabled: true, width: 160, height: 40, showBaseline: true, showNowIndicator: true,
             showNowLabel: true, maxDataPoints: 50, lookbackHours: 48, showBaselineLabel: true, useZScoreColors: true,
             showXAxisLabels: true, showIncidents: true, lineStyle: "linear" }
     },
 
     getStyles: () => ["MMM-TrafficGlance.css", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"],
-    getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "ColorTheme.js", "MapRenderer.js", "TemplateEngine.js"],
+    getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "ColorTheme.js", "MapRenderer.js", "TemplateEngine.js", "SettingsPanel.js"],
 
     start() {
+        this._settings = new SettingsPanel({
+            onLoad: () => this.sendSocketNotification("SETTINGS_LOAD"),
+            onSave: changes => this.sendSocketNotification("SETTINGS_SAVE", changes)
+        });
         this.trafficData = []; this._mapReady = false; this._mapEngine = null;
         this._wrapper = null; this._quotaExhausted = false; this._fetchError = null;
         this._nextReset = null; this._initMapPending = false;
@@ -22,7 +26,10 @@ Module.register("MMM-TrafficGlance", {
     },
 
     socketNotificationReceived(notification, payload) {
-        if (notification === "TRAFFIC_UPDATE") {
+        if (notification === "SETTINGS_DATA") this._settings.showData(payload);
+        else if (notification === "SETTINGS_SAVED") this._settings.showSaved();
+        else if (notification === "SETTINGS_ERROR") this._settings.showError(payload);
+        else if (notification === "TRAFFIC_UPDATE") {
             this._fetchError = null; this.trafficData = payload;
             if (this._mapReady && this._mapEngine && this._wrapper) {
                 this._updateRoutes(); this._mapEngine.draw(this.trafficData);
@@ -46,6 +53,9 @@ Module.register("MMM-TrafficGlance", {
     getDom() {
         if (this._wrapper) { this._updateRoutes(); return this._wrapper; }
         const w = document.createElement("div"); w.className = "traffic-root";
+        if (this.config.maxWidth) w.style.maxWidth = this.config.maxWidth;
+        w.style.setProperty("--tg-zoom-size", this.config.map.zoomControlSize + "px");
+        this._settings.attach(w);
         if (this._quotaExhausted) {
             const resetStr = this._nextReset ? new Date(this._nextReset).toLocaleString() : "midnight UTC";
             w.insertAdjacentHTML("beforeend",
@@ -60,9 +70,10 @@ Module.register("MMM-TrafficGlance", {
             const rc = w.appendChild(document.createElement("div")); rc.className = "route-container";
             this.trafficData.forEach(r => rc.appendChild(this._routeRow(r)));
         }
-        const m = w.appendChild(document.createElement("div"));
-        m.id = "traffic-map-container"; m.style.cssText = `height:${this.config.mapHeight};width:${this.config.mapWidth}`;
         this._wrapper = w;
+        if (this.config.display.showMap === false) return w;
+        const m = w.appendChild(document.createElement("div"));
+        m.id = "traffic-map-container"; m.style.cssText = `height:${this.config.map.height};width:${this.config.map.width}`;
         if (!this._initMapPending) {
             this._initMapPending = true;
             setTimeout(() => requestAnimationFrame(() => this._initMap()), 100);
@@ -98,13 +109,13 @@ Module.register("MMM-TrafficGlance", {
     },
 
     _routeRow(route) {
-        const cc = ColorTheme.getRouteColorClass(route, this.config.thresholds?.critical);
+        const cc = ColorTheme.getRouteColorClass(route, this.config.thresholds);
         const deltaVal = route.historicalAverage ? Math.round(route.currentDuration - route.historicalAverage) : null;
-        const deltaHtml = deltaVal !== null && deltaVal !== 0
+        const deltaHtml = this.config.display.showDelta !== false && deltaVal !== null && deltaVal !== 0
             ? `<span class="route-delta ${cc}">${deltaVal > 0 ? "+" : ""}${deltaVal}m</span>` : "";
         const d = document.createElement("div"); d.className = "route-row";
         d.innerHTML = `<div class="route-header"><span class="route-name"></span><div class="route-metrics">${
-            route.trendDirection ? `<span class="trend-arrow ${route.trendDirection}">${{ up: "↑", down: "↓", stable: "→" }[route.trendDirection]}</span>` : ""
+            this.config.display.showTrend !== false && route.trendDirection ? `<span class="trend-arrow ${route.trendDirection}">${{ up: "↑", down: "↓", stable: "→" }[route.trendDirection]}</span>` : ""
         }</div></div><div class="route-time ${cc}"><span class="big-num">${route.currentDuration}</span><span class="unit">mins</span>${deltaHtml}</div>${this._incidentsHtml(route)}`;
         d.querySelector(".route-name").textContent = route.name;
         if (this.config.sparkline?.enabled !== false && route.sparklineData?.points?.length) {
@@ -135,7 +146,7 @@ Module.register("MMM-TrafficGlance", {
         this._mapEngine = new MapRenderer("traffic-map-container", this.config);
         if (this.trafficData.length) { this._mapEngine.draw(this.trafficData); this._mapEngine.map.invalidateSize(); }
         else if (this._quotaExhausted) {
-            this._mapEngine.map.setView(this.config.mapCenter || [47.3, 19.1], this.config.mapZoom || 10);
+            this._mapEngine.map.setView(this.config.map.center || [47.3, 19.1], this.config.map.zoom || 10);
             this._mapEngine.setFlowOverlay(true);
         }
         this._mapReady = true;

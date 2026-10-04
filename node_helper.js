@@ -2,6 +2,7 @@ const NodeHelper = require("node_helper");
 // node:sqlite requires Node >=22.5; add --experimental-sqlite to MM start cmd if on Node 22.5-22.10
 const { DatabaseSync } = require("node:sqlite");
 const { resolvePacedIntervalMs, startOfUtcMonth } = require("./quotaPacing");
+const configFile = require("./configFile");
 
 module.exports = NodeHelper.create({
     start() {
@@ -69,7 +70,7 @@ module.exports = NodeHelper.create({
 
     async _fetch(route) {
         const api = this.config.api ?? {};
-        const avoid = [api.avoidTolls && "tollRoads", api.avoidHighways && "motorways"].filter(Boolean).join(",");
+        const avoid = (api.avoid ?? []).join(",");
         const params = {
             key: this.config.apiKey, traffic: api.traffic !== false, departAt: "now",
             routeType: api.routeType ?? "fastest", computeTravelTimeFor: "all",
@@ -185,6 +186,15 @@ module.exports = NodeHelper.create({
     },
 
     socketNotificationReceived(notification, payload) {
+        if (notification === "SETTINGS_LOAD") {
+            this.sendSocketNotification("SETTINGS_DATA", configFile.load(configFile.CONFIG_PATH, this.config));
+            return;
+        }
+        if (notification === "SETTINGS_SAVE") {
+            const result = configFile.save(configFile.CONFIG_PATH, payload);
+            this.sendSocketNotification(result.ok ? "SETTINGS_SAVED" : "SETTINGS_ERROR", result);
+            return;
+        }
         if (notification !== "CONFIG") return;
         if (this.intervalId) clearTimeout(this.intervalId);
         this.config = payload;
