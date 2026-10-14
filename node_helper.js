@@ -3,6 +3,7 @@ const NodeHelper = require("node_helper");
 const { DatabaseSync } = require("node:sqlite");
 const { resolvePacedIntervalMs, startOfUtcMonth } = require("./quotaPacing");
 const configFile = require("./configFile");
+const basemapService = require("./basemapService");
 
 module.exports = NodeHelper.create({
     start() {
@@ -187,12 +188,22 @@ module.exports = NodeHelper.create({
 
     socketNotificationReceived(notification, payload) {
         if (notification === "SETTINGS_LOAD") {
-            this.sendSocketNotification("SETTINGS_DATA", configFile.load(configFile.CONFIG_PATH, this.config));
+            this.sendSocketNotification("SETTINGS_DATA", configFile.load(configFile.CONFIG_PATH));
             return;
         }
         if (notification === "SETTINGS_SAVE") {
             const result = configFile.save(configFile.CONFIG_PATH, payload);
             this.sendSocketNotification(result.ok ? "SETTINGS_SAVED" : "SETTINGS_ERROR", result);
+            return;
+        }
+        if (notification === "BASEMAP_REQUEST") {
+            basemapService.getBasemap(payload).then(
+                data => this.sendSocketNotification("BASEMAP_DATA", data),
+                e => {
+                    console.warn("[MMM-TrafficGlance] basemap unavailable:", e.message);
+                    this.sendSocketNotification("BASEMAP_ERROR", { message: e.message });
+                }
+            );
             return;
         }
         if (notification !== "CONFIG") return;
