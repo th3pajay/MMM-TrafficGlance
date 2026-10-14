@@ -238,6 +238,76 @@
     }
 }
 
+.tg-svg-map {
+    --tg-map-bg: #12161c;
+    --tg-water: #1b2a3a;
+    --tg-river: #1b2a3a;
+    --tg-road-minor: #2a313b;
+    --tg-road-mid: #36404c;
+    --tg-road-major: #46515f;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: var(--tg-map-bg);
+
+    .tg-svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+    .tg-svg.tg-dragging { cursor: grabbing; }
+
+    .tg-svg-scale {
+        position: absolute;
+        right: 6px;
+        bottom: 18px;
+        box-sizing: border-box;
+        border: 2px solid #ccc;
+        border-top: none;
+        color: #ccc;
+        font-size: 10px;
+        line-height: 1.2;
+        text-align: center;
+        text-shadow: 0 0 3px #000;
+        pointer-events: none;
+    }
+
+    .tg-base-water { fill: var(--tg-water); stroke: none; }
+    .tg-base-river { fill: none; stroke: var(--tg-river); stroke-width: 3; stroke-linejoin: round; }
+    .tg-base-tertiary { fill: none; stroke: var(--tg-road-minor); stroke-width: 1; stroke-linejoin: round; }
+    .tg-base-secondary { fill: none; stroke: var(--tg-road-mid); stroke-width: 1.5; stroke-linejoin: round; }
+    .tg-base-primary { fill: none; stroke: var(--tg-road-major); stroke-width: 2; stroke-linejoin: round; }
+    .tg-base-motorway { fill: none; stroke: var(--tg-road-major); stroke-width: 3; stroke-linejoin: round; }
+
+    .tg-svg-zoom {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+
+        button {
+            width: var(--tg-zoom-size, 22px);
+            height: var(--tg-zoom-size, 22px);
+            font-size: calc(var(--tg-zoom-size, 22px) * 0.64);
+            line-height: 1;
+            padding: 0;
+            border: none;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.55);
+            color: #ddd;
+            cursor: pointer;
+        }
+    }
+
+    .tg-svg-attribution {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        padding: 0 4px;
+        background: rgba(0, 0, 0, 0.5);
+        color: #999;
+        font-size: 9px;
+    }
+}
+
 .tg-osm-dark {
     filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
 }

@@ -1,27 +1,18 @@
 Module.register("MMM-TrafficGlance", {
-    defaults: {
-        updateInterval: 300000, maxWidth: null, thresholds: { warning: 1, critical: 1.25 },
-        display: { showDelta: true, showTrend: true, showMap: true },
-        map: { width: "100%", height: "220px", zoom: null, center: null, padding: [20, 20],
-            tileProvider: "osm", zoomControlSize: 22, showScale: true, showIncidentMarkers: true },
-
-        api: { timeout: 10000, routeType: "fastest", travelMode: "car", traffic: true, avoid: [] },
-        sparkline: { enabled: true, width: 160, height: 40, showBaseline: true, showNowIndicator: true,
-            showNowLabel: true, maxDataPoints: 50, lookbackHours: 48, showBaselineLabel: true, useZScoreColors: true,
-            showXAxisLabels: true, showIncidents: true, lineStyle: "linear" }
-    },
+    defaults: {},
 
     getStyles: () => ["MMM-TrafficGlance.css", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"],
-    getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "ColorTheme.js", "MapRenderer.js", "TemplateEngine.js", "SettingsPanel.js"],
+    getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "configNormalizer.js", "ColorTheme.js", "MapRenderer.js", "SvgMapRenderer.js", "TemplateEngine.js", "SettingsPanel.js"],
 
     start() {
+        this.config = TrafficGlanceConfig.normalize(this.config);
         this._settings = new SettingsPanel({
             onLoad: () => this.sendSocketNotification("SETTINGS_LOAD"),
             onSave: changes => this.sendSocketNotification("SETTINGS_SAVE", changes)
         });
         this.trafficData = []; this._mapReady = false; this._mapEngine = null;
         this._wrapper = null; this._quotaExhausted = false; this._fetchError = null;
-        this._nextReset = null; this._initMapPending = false;
+        this._nextReset = null; this._initMapPending = false; this._basemap = null;
         this.sendSocketNotification("CONFIG", this.config);
     },
 
@@ -29,7 +20,10 @@ Module.register("MMM-TrafficGlance", {
         if (notification === "SETTINGS_DATA") this._settings.showData(payload);
         else if (notification === "SETTINGS_SAVED") this._settings.showSaved();
         else if (notification === "SETTINGS_ERROR") this._settings.showError(payload);
-        else if (notification === "TRAFFIC_UPDATE") {
+        else if (notification === "BASEMAP_DATA") {
+            this._basemap = payload;
+            this._mapEngine?.setBasemap?.(payload);
+        } else if (notification === "TRAFFIC_UPDATE") {
             this._fetchError = null; this.trafficData = payload;
             if (this._mapReady && this._mapEngine && this._wrapper) {
                 this._updateRoutes(); this._mapEngine.draw(this.trafficData);
@@ -143,10 +137,17 @@ Module.register("MMM-TrafficGlance", {
         const el = document.getElementById("traffic-map-container");
         if (!el || el.offsetParent === null) { setTimeout(() => this._initMap(attempt + 1), 1000); return; }
         if (this._mapEngine) { this._mapEngine.destroy(); this._mapEngine = null; }
-        this._mapEngine = new MapRenderer("traffic-map-container", this.config);
-        if (this.trafficData.length) { this._mapEngine.draw(this.trafficData); this._mapEngine.map.invalidateSize(); }
+        if (this.config.map.renderer === "svg") {
+            this._mapEngine = new SvgMapRenderer("traffic-map-container", this.config, {
+                requestBasemap: bbox => this.sendSocketNotification("BASEMAP_REQUEST", bbox)
+            });
+            if (this._basemap) this._mapEngine.setBasemap(this._basemap);
+        } else {
+            this._mapEngine = new MapRenderer("traffic-map-container", this.config);
+        }
+        if (this.trafficData.length) { this._mapEngine.draw(this.trafficData); this._mapEngine.invalidateSize(); }
         else if (this._quotaExhausted) {
-            this._mapEngine.map.setView(this.config.map.center || [47.3, 19.1], this.config.map.zoom || 10);
+            this._mapEngine.setView(this.config.map.center || [47.3, 19.1], this.config.map.zoom || 10);
             this._mapEngine.setFlowOverlay(true);
         }
         this._mapReady = true;

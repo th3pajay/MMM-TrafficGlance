@@ -1,12 +1,12 @@
 # Runtime
 node_modules/
-scripts/
+-workspace/
 traffic.db
+basemap_cache.json
 *.db
 *.db-shm
 *.db-wal
 
-package-lock.json
 
 # Logs
 *.log
@@ -14,7 +14,6 @@ package-lock.json
 # OS
 .DS_Store
 Thumbs.db
-nul
 
 # IDE / editor
 .idea/

@@ -45,6 +45,14 @@ class MapRenderer {
         }
     }
 
+    invalidateSize() {
+        this.map?.invalidateSize();
+    }
+
+    setView(center, zoom) {
+        this.map?.setView(center, zoom);
+    }
+
     destroy() {
         this._layers?.clear();
         this.map?.remove();

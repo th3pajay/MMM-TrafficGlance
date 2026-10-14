@@ -1,92 +1,32 @@
 {
     module: "MMM-TrafficGlance",
     position: "bottom_center",
-    header: "Traffic Intelligence",
+    header: "Traffic Glance",
     config: {
         apiKey: "YOUR_TOMTOM_API_KEY_HERE",
-        updateInterval: 300000,
-        maxWidth: "350px",          // null = no limit
-
-        // Display
-        display: {
-            showDelta: true,        // "+2m" difference vs historical average
-            showTrend: true,        // up/down/stable arrow
-            showMap: true
-        },
-
-        // Map
-        map: {
-            width: "100%",
-            height: "220px",
-            zoom: null,                 // null = auto-fit to routes
-            center: null,               // null = auto-fit; or [lat, lon]
-            padding: [20, 20],          // [vertical, horizontal] px when auto-fitting
-            tileProvider: "osm",        // "osm" (OpenStreetMap) | "osmfr" (OpenStreetMap France HOT) | "tomtom" (night style, uses apiKey)
-            zoomControlSize: 22,        // px; size of the +/- zoom buttons (Leaflet default is 30)
-            showScale: true,
-            showIncidentMarkers: true   // circle markers with tooltips at each incident location (requires api.incidents=true)
-        },
-
-        // TomTom routing API
-        api: {
-            adaptivePacing: true,   // default: stretch polling to spread monthlyQuota across the
-                                    // rest of the UTC calendar month so updateInterval can't
-                                    // exhaust it early. updateInterval is always the floor -
-                                    // pacing only slows polling down, never speeds it up.
-                                    // Set to false to always poll at exactly updateInterval.
-            monthlyQuota: 20000,    // your Routing API monthly call allowance (used only when
-                                    // adaptivePacing is true)
-            timeout: 10000,         // request timeout (ms)
-            routeType: "fastest",   // "fastest" | "shortest" | "eco" | "thrilling"
-            travelMode: "car",      // "car" | "truck" | "taxi" | "bus" | "pedestrian" | "bicycle"
-            traffic: true,          // use live traffic in routing
-            avoid: [],              // "tollRoads" | "motorways" | "ferries" | "unpavedRoads" | "carpools" | "alreadyUsedRoads"
-            incidents: false,      // set true to detect/render jam, roadwork, and closure incidents on routes
-            incidentCategories: null // only applies when incidents=true; filter shown categories, e.g. ["ROAD_CLOSURE","ROAD_WORK"]; null = show all (JAM, ROAD_WORK, ROAD_CLOSURE, OTHER)
-        },
-
-        // Alert thresholds
-        thresholds: {
-            warning: 1,             // percent above historical average where yellow starts
-            critical: 1.25          // delay factor for red alert (1.25 = 25% above free-flow)
-        },
-
-        // Sparkline charts
-        sparkline: {
-            enabled: true,
-            width: 160,             // canvas width (px)
-            height: 52,             // canvas height (px); 40 chart + 12 for x-axis labels
-            maxDataPoints: 50,      // max points rendered
-            lookbackHours: 48,      // data window; auto-set to 720 in monthly view
-            showBaseline: true,     // draw historical average line
-            showBaselineLabel: true,// show "Avg: 34m" label on baseline
-            showNowIndicator: true, // dot marking the latest measurement
-            showXAxisLabels: true,  // show HH:mm time labels under the sparkline
-            showNowLabel: true,     // "Now" text next to the dot
-            showIncidents: true,    // incident shape markers along the sparkline (requires api.incidents=true)
-            useZScoreColors: true,  // per-segment coloring based on Z-score deviation
-            lineStyle: "linear",    // line shape: "linear" (straight), "curved" (smooth), "stepped" (blocky)
-            colors: {
-                critical: "#e91e63",
-                warning: "#f39c12",
-                good: "#2ecc71",
-                baseline: "#888888"
-            }
-        },
-
         routes: [
-            {
-                id: "morning-commute",
-                name: "Work",
-                origin: "48.8584,2.2945",
-                destination: "48.8606,2.3376"
-            },
-            {
-               id: "evening-route",
-               name: "Home",
-               origin: "48.8606,2.3376",
-               destination: "48.8584,2.2945"
-           }
-        ]
+            { id: "to-work", name: "Work", origin: "48.8584,2.2945", destination: "48.8606,2.3376" },
+            { id: "to-home", name: "Home", origin: "48.8606,2.3376", destination: "48.8584,2.2945" }
+        ],
+
+        refreshMinutes: 5,        // floor; polling auto-slows to fit monthlyQuota
+        monthlyQuota: 20000,      // your Routing API calls per month; 0 = poll exactly every refreshMinutes
+        width: 350,               // px, 0 = no limit
+
+        map: "leaflet",           // "leaflet" | "leaflet-fr" | "leaflet-tomtom" | "svg" | false
+        mapHeight: 220,           // px
+        sparkline: true,          // true | false | "curved" | "stepped"
+        incidents: true,          // true | false | ["JAM", "ROAD_WORK", "ROAD_CLOSURE", "OTHER"]
+
+        showDelta: true,          // "+2m" vs historical average
+        showTrend: true,          // up/down/stable arrow
+        warnAt: 10,               // % slower than usual -> yellow
+        criticalAt: 25            // % slower than usual -> red
+
+        // advanced: {            // optional, same names as the internal config; overrides everything above
+        //     api: { routeType: "fastest", travelMode: "car", avoid: [], timeout: 10000 },
+        //     map: { zoom: null, center: null, padding: [20, 20], zoomControlSize: 22, showScale: true },
+        //     sparkline: { width: 160, height: 40, maxDataPoints: 50, lookbackHours: 48, colors: { good: "#2ecc71" } }
+        // }
     }
 }
