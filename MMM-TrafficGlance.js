@@ -116,8 +116,8 @@ Module.register("MMM-TrafficGlance", {
             const sc = document.createElement("div"); sc.className = "sparkline-container";
             const c = document.createElement("canvas"); c.className = "sparkline-canvas";
             c.id = `spark-${route.id}`; c.width = this.config.sparkline.width; c.height = this.config.sparkline.height;
-            sc.appendChild(c); d.querySelector(".route-metrics").prepend(sc);
-            setTimeout(() => { if (!c.isConnected) return; const e = new SparklineEngine(c.id, route.sparklineData, this.config); if (e.canvas) e.render(); }, 100);
+            sc.appendChild(c); d.querySelector(".route-header").after(sc);
+            setTimeout(() => { if (!c.isConnected) return; c.width = Math.max(this.config.sparkline.width, Math.floor(sc.clientWidth)); const e = new SparklineEngine(c.id, route.sparklineData, this.config); if (e.canvas) e.render(); }, 100);
         }
         return d;
     },
