@@ -174,10 +174,10 @@
     }
 
     .route-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .route-name { flex: 0 0 auto; font-size: 14px; font-weight: 500; }
+    .route-name { flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
     .route-metrics { display: flex; flex: 1 1 0; min-width: 0; justify-content: flex-end; align-items: center; gap: 8px; }
-    .sparkline-container { display: flex; flex-direction: column; min-width: 0; }
-    .sparkline-canvas { opacity: 0.9; max-width: 100%; height: auto; }
+    .sparkline-container { grid-column: 1 / -1; min-width: 0; }
+    .sparkline-canvas { opacity: 0.9; width: 100%; display: block; }
 
     .trend-arrow { flex: 0 0 20px; text-align: center; font-size: 18px; font-weight: bold; line-height: 1; }
     .trend-arrow.up { color: #e91e63; }

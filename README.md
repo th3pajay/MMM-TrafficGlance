@@ -3,7 +3,7 @@
 Real-time traffic for MagicMirror² with TomTom routing, historical sparklines and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.1.36-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.37-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -173,7 +173,7 @@ Put these inside `advanced`, e.g. `advanced: { api: { travelMode: "truck" }, map
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `sparkline.width` / `sparkline.height` | `160` / `40` | Canvas size px |
+| `sparkline.width` / `sparkline.height` | `160` / `40` | Minimum canvas width / height in px; the chart expands to fill the row |
 | `sparkline.lookbackHours` | `48` | History window |
 | `sparkline.maxDataPoints` | `50` | Max points rendered |
 | `sparkline.showBaseline`, `showBaselineLabel`, `showNowIndicator`, `showNowLabel`, `showXAxisLabels`, `useZScoreColors` | `true` | Individual elements |
