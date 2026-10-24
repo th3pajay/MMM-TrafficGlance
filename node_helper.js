@@ -103,21 +103,48 @@ module.exports = NodeHelper.create({
         const live = Math.round(s.travelTimeInSeconds / 60);
         const hist = Math.round(s.historicTrafficTravelTimeInSeconds / 60);
         const ntt = s.noTrafficTravelTimeInSeconds;
+        const along = this._cumulativeDistance(polyline);
+        const total = along[along.length - 1] || 0;
+        const positionOf = (a, b) => total > 0 ? ((along[a] ?? 0) + (along[b] ?? along[a] ?? 0)) / 2 / total : 0;
         const incidents = !api.incidents ? [] : (r.sections ?? [])
             .filter(x => x.sectionType === "TRAFFIC" && x.delayInSeconds > 30)
             .filter(x => !api.incidentCategories || api.incidentCategories.includes(x.simpleCategory))
             .map(({ startPointIndex, endPointIndex, magnitudeOfDelay: magnitude, simpleCategory: category, delayInSeconds: delaySeconds }) =>
-                ({ startPointIndex, endPointIndex, magnitude, category, delaySeconds }));
+                ({ startPointIndex, endPointIndex, magnitude, category, delaySeconds, position: positionOf(startPointIndex, endPointIndex) }));
         if (this.db) for (const inc of incidents) this._insIncident.run(route.id, now, inc.category, inc.magnitude, inc.delaySeconds);
+        const sparklineData = this._sparkline(route.id);
         return {
             id: route.id, name: route.name,
             currentDuration: live, historicalAverage: hist,
+            freeFlowDuration: ntt > 0 ? Math.round(ntt / 60) : null,
+            distanceKm: s.lengthInMeters ? Math.round(s.lengthInMeters / 100) / 10 : null,
+            arrivalTime: s.arrivalTime ?? null,
             delayFactor: ntt > 0 ? s.travelTimeInSeconds / ntt : 1,
-            trendDirection: live > hist ? "up" : live < hist ? "down" : "stable",
+            trendDirection: this._trend(route.id, live, sparklineData.points),
             incidents,
             polyline,
-            sparklineData: this._sparkline(route.id)
+            sparklineData
         };
+    },
+
+    _cumulativeDistance(polyline) {
+        const out = [0];
+        for (let i = 1; i < polyline.length; i++) {
+            const a = polyline[i - 1], b = polyline[i];
+            const dx = (b.longitude - a.longitude) * Math.cos((a.latitude + b.latitude) * Math.PI / 360);
+            out.push(out[i - 1] + Math.hypot(dx, b.latitude - a.latitude));
+        }
+        return out;
+    },
+
+    _trend(routeId, live, points) {
+        this._recent ??= new Map();
+        const recent = points.length >= 2 ? points.map(p => p.value) : [...(this._recent.get(routeId) ?? []), live];
+        this._recent.set(routeId, recent.slice(-4));
+        const prior = recent.slice(-4, -1);
+        if (!prior.length) return "stable";
+        const diff = live - prior.reduce((a, b) => a + b, 0) / prior.length;
+        return diff >= 1 ? "up" : diff <= -1 ? "down" : "stable";
     },
 
     async _update() {

@@ -11,6 +11,7 @@ const CONFIG_PATH = path.resolve(__dirname, "../../config/config.js");
 const UNPARSABLE = "Settings cannot be parsed, please check manually.";
 const INCIDENT_CATEGORIES = normalizer.INCIDENT_CATEGORIES;
 const LATLON_RE = /^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?$/;
+const HERO_RE = /^([01]?\d|2[0-3]):[0-5]\d-([01]?\d|2[0-3]):[0-5]\d$/;
 
 const field = (p, section, label, type, extra = {}) => ({ path: p, section, label, type, ...extra });
 const opt = (value, label) => ({ value, label });
@@ -19,6 +20,7 @@ const SCHEMA = [
     field("refreshMinutes", "General", "Refresh interval (minutes)", "number", { min: 1, max: 1440 }),
     field("monthlyQuota", "General", "Monthly API quota (0 = no pacing)", "number", { min: 0, max: 1000000, integer: true }),
     field("width", "General", "Max width (px, 0 = no limit)", "number", { min: 0, max: 3000, integer: true }),
+    field("scale", "General", "Scale (1 = 100%)", "number", { min: 0.5, max: 3 }),
 
     field("map", "Map", "Map", "choice", {
         options: [opt("leaflet", "Leaflet (OpenStreetMap)"), opt("leaflet-fr", "Leaflet (OpenStreetMap France)"),
@@ -32,6 +34,7 @@ const SCHEMA = [
     field("incidents", "Display", "Incidents (none = off)", "incidents", { options: INCIDENT_CATEGORIES }),
     field("showDelta", "Display", "Show delta vs average", "boolean"),
     field("showTrend", "Display", "Show trend arrow", "boolean"),
+    field("animations", "Display", "Animations", "boolean"),
     field("warnAt", "Display", "Yellow when slower than usual by (%)", "number", { min: 0, max: 100 }),
     field("criticalAt", "Display", "Red when slower than usual by (%)", "number", { min: 1, max: 400 }),
 
@@ -231,6 +234,14 @@ function setPath(text, segs, value) {
 
 const bad = f => ({ ok: false, error: `Invalid value for "${f.label}"` });
 
+function heroValue(v) {
+    if (v === undefined || v === null || v === "") return null;
+    const list = (Array.isArray(v) ? v : String(v).split(",")).map(x => String(x).replace(/\s+/g, "")).filter(Boolean);
+    if (!list.length) return null;
+    if (!list.every(x => HERO_RE.test(x))) return undefined;
+    return list.length === 1 ? list[0] : list;
+}
+
 function checkField(f, v) {
     switch (f.type) {
         case "boolean":
@@ -257,8 +268,10 @@ function checkField(f, v) {
                 const origin = typeof r.origin === "string" ? r.origin.replace(/\s+/g, "") : "";
                 const destination = typeof r.destination === "string" ? r.destination.replace(/\s+/g, "") : "";
                 if (!id || !name || ids.has(id) || !LATLON_RE.test(origin) || !LATLON_RE.test(destination)) return bad(f);
+                const hero = heroValue(r.hero);
+                if (hero === undefined) return bad(f);
                 ids.add(id);
-                out.push({ id, name, origin, destination });
+                out.push(hero ? { id, name, origin, destination, hero } : { id, name, origin, destination });
             }
             return { ok: true, value: out };
         }

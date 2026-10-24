@@ -16,18 +16,19 @@
         routes: [],
         updateInterval: 300000,
         maxWidth: null,
+        scale: 1,
         thresholds: { warning: 10, critical: 1.25 },
-        display: { showDelta: true, showTrend: true, showMap: true },
+        display: { showDelta: true, showTrend: true, showMap: true, animations: true },
         map: {
-            width: "100%", height: "220px", zoom: null, center: null, padding: [20, 20],
-            renderer: "leaflet", tileProvider: "osm", zoomControlSize: 22, showScale: true, showIncidentMarkers: true
+            width: "100%", height: "312px", zoom: null, center: null, padding: [20, 20],
+            renderer: "leaflet", tileProvider: "osm", zoomControlSize: 26, showScale: true, showIncidentMarkers: true
         },
         api: {
             adaptivePacing: true, monthlyQuota: 20000, timeout: 10000, routeType: "fastest", travelMode: "car",
             traffic: true, avoid: [], incidents: true, incidentCategories: null
         },
         sparkline: {
-            enabled: true, width: 160, height: 40, showBaseline: true, showNowIndicator: true, showNowLabel: true,
+            enabled: true, width: 192, height: 48, showBaseline: true, showNowIndicator: true, showNowLabel: true,
             maxDataPoints: 50, lookbackHours: 48, showBaselineLabel: true, useZScoreColors: true,
             showXAxisLabels: true, showIncidents: true, lineStyle: "linear"
         }
@@ -69,6 +70,7 @@
             if (raw.monthlyQuota > 0) cfg.api.monthlyQuota = raw.monthlyQuota;
         }
         if (isNum(raw.width)) cfg.maxWidth = raw.width > 0 ? raw.width + "px" : null;
+        if (isNum(raw.scale) && raw.scale > 0) cfg.scale = Math.min(3, Math.max(0.5, raw.scale));
         if (raw.map === false) cfg.display.showMap = false;
         else if (typeof raw.map === "string" && MAP_PRESETS[raw.map]) {
             cfg.display.showMap = true;
@@ -83,6 +85,7 @@
         if (typeof raw.incidents === "boolean" || Array.isArray(raw.incidents)) setIncidents(cfg, raw.incidents);
         if (typeof raw.showDelta === "boolean") cfg.display.showDelta = raw.showDelta;
         if (typeof raw.showTrend === "boolean") cfg.display.showTrend = raw.showTrend;
+        if (typeof raw.animations === "boolean") cfg.display.animations = raw.animations;
         if (isNum(raw.warnAt)) cfg.thresholds.warning = raw.warnAt;
         if (isNum(raw.criticalAt)) cfg.thresholds.critical = 1 + raw.criticalAt / 100;
     }
@@ -114,12 +117,14 @@
             refreshMinutes: Math.round((cfg.updateInterval / 60000) * 100) / 100,
             monthlyQuota: a.adaptivePacing === false ? 0 : a.monthlyQuota,
             width: px(cfg.maxWidth, 0),
+            scale: cfg.scale,
             map,
-            mapHeight: px(m.height, 220),
+            mapHeight: px(m.height, 312),
             sparkline: s.enabled === false ? false : LINE_STYLES.includes(s.lineStyle) ? s.lineStyle : true,
             incidents: a.incidents ? (Array.isArray(a.incidentCategories) && a.incidentCategories.length ? a.incidentCategories : true) : false,
             showDelta: cfg.display.showDelta !== false,
             showTrend: cfg.display.showTrend !== false,
+            animations: cfg.display.animations !== false,
             warnAt: cfg.thresholds.warning,
             criticalAt: Math.round((cfg.thresholds.critical - 1) * 100)
         };

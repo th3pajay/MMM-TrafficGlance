@@ -1,6 +1,6 @@
 class SparklineEngine {
     constructor(canvasId, data, config) {
-        this.canvas = document.getElementById(canvasId);
+        this.canvas = typeof canvasId === "string" ? document.getElementById(canvasId) : canvasId;
         if (!this.canvas) return;
         this.ctx = this.canvas.getContext("2d");
         this.config = config;
@@ -86,7 +86,7 @@ class SparklineEngine {
         for (let k = 1; k < count - 1; k++) idxs.add(Math.round(k * (n - 1) / (count - 1)));
         const sorted = [...idxs].sort((a, b) => a - b);
         this.ctx.save();
-        this.ctx.font = "8px sans-serif";
+        this.ctx.font = "10px sans-serif";
         this.ctx.fillStyle = ColorTheme.ui.textSecondary;
         this.ctx.globalAlpha = 0.7;
         const y = this.h - 2;
@@ -105,9 +105,9 @@ class SparklineEngine {
         return {
             good: cfg.good || ColorTheme.traffic.good,
             warning: cfg.warning || ColorTheme.traffic.warning,
-            critical: cfg.critical || ColorTheme.traffic.criticalAlt,
+            critical: cfg.critical || ColorTheme.traffic.critical,
             baseline: cfg.baseline || ColorTheme.ui.baseline,
-            line: isAbove ? (cfg.critical || ColorTheme.traffic.criticalAlt) : (cfg.good || ColorTheme.traffic.good)
+            line: isAbove ? (cfg.critical || ColorTheme.traffic.critical) : (cfg.good || ColorTheme.traffic.good)
         };
     }
 
@@ -124,7 +124,7 @@ class SparklineEngine {
         this.ctx.moveTo(0, baseY); this.ctx.lineTo(this.w, baseY);
         this.ctx.stroke();
         if (this.config?.sparkline?.showBaselineLabel !== false && this.w >= 80) {
-            this.ctx.font = "bold 8px sans-serif";
+            this.ctx.font = "bold 10px sans-serif";
             this.ctx.fillStyle = c.baseline;
             this.ctx.globalAlpha = 0.8;
             this.ctx.textAlign = "left";
@@ -225,6 +225,7 @@ class SparklineEngine {
     }
 
     _node(pt) {
+        this.nowPoint = { x: pt.x, y: pt.y, color: this._zColor(pt.z) };
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
@@ -235,7 +236,7 @@ class SparklineEngine {
         this.ctx.fillStyle = this._zColor(pt.z);
         this.ctx.fill();
         if (this.config?.sparkline?.showNowLabel !== false && this.w >= 80) {
-            this.ctx.font = "bold 8px sans-serif";
+            this.ctx.font = "bold 10px sans-serif";
             this.ctx.fillStyle = this._zColor(pt.z);
             this.ctx.textAlign = "right";
             this.ctx.fillText("NOW", pt.x - 2, pt.y > 12 ? pt.y - 6 : pt.y + 12);

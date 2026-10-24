@@ -166,11 +166,12 @@ class SvgMapRenderer {
         }
         const [cw, ch] = this._size();
         const [padY, padX] = this.config.map.padding || [20, 20];
+        const [extraX, extraY] = this._padTopLeft ? [Math.max(this._padTopLeft[0] - padX, 0), Math.max(this._padTopLeft[1] - padY, 0)] : [0, 0];
         const bw = Math.max(maxX - minX, 1e-5), bh = Math.max(maxY - minY, 1e-5);
-        const availW = Math.max(cw - 2 * padX, 10), availH = Math.max(ch - 2 * padY, 10);
+        const availW = Math.max(cw - 2 * padX - extraX, 10), availH = Math.max(ch - 2 * padY - extraY, 10);
         const scale = Math.max(bw / availW, bh / availH);
         const w = cw * scale, h = ch * scale;
-        this.home = { x: (minX + maxX) / 2 - w / 2, y: (minY + maxY) / 2 - h / 2, w, h };
+        this.home = { x: (minX + maxX) / 2 - (extraX / 2) * scale - w / 2, y: (minY + maxY) / 2 - (extraY / 2) * scale - h / 2, w, h };
         if (!this._userView || !this.view) this.view = { ...this.home };
         this._applyView();
     }
@@ -253,8 +254,9 @@ class SvgMapRenderer {
         }, parent);
     }
 
-    draw(trafficData) {
+    draw(trafficData, opts = {}) {
         if (!this.svg || !trafficData?.length) return;
+        this._padTopLeft = opts.paddingTopLeft ?? null;
         this.routeGroup.textContent = "";
         this.incidentGroup.textContent = "";
         this.markerGroup.textContent = "";
@@ -285,7 +287,7 @@ class SvgMapRenderer {
                 allLatLngs.push(latLngs[i]);
                 allXY.push(xy[i]);
             }
-            this._line(this.routeGroup, xy, ColorTheme.getRouteColor(route, this.config.thresholds), 5, { opacity: 0.9 });
+            this._line(this.routeGroup, xy, ColorTheme.getRouteColor(route, this.config.thresholds), 6, { opacity: 0.9 });
 
             (route.incidents ?? []).forEach(inc => {
                 const seg = xy.slice(inc.startPointIndex, inc.endPointIndex + 1);
@@ -297,8 +299,8 @@ class SvgMapRenderer {
                 const [x, y] = seg[Math.floor(seg.length / 2)];
                 const d = `M${x.toFixed(4)} ${y.toFixed(4)}h0.00001`;
                 const marker = { fill: "none", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" };
-                SvgMapRenderer._el("path", { ...marker, d, stroke: "#fff", "stroke-width": 14 }, this.markerGroup);
-                const dot = SvgMapRenderer._el("path", { ...marker, d, stroke: color, "stroke-width": 11 }, this.markerGroup);
+                SvgMapRenderer._el("path", { ...marker, d, stroke: "#fff", "stroke-width": 17 }, this.markerGroup);
+                const dot = SvgMapRenderer._el("path", { ...marker, d, stroke: color, "stroke-width": 13 }, this.markerGroup);
                 SvgMapRenderer._el("title", {}, dot).textContent = SvgMapRenderer._incidentLabel(inc);
             });
         });

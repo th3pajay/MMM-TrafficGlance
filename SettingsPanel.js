@@ -43,10 +43,10 @@ class SettingsPanel {
         return e;
     }
 
-    attach(root) {
+    attach(root, buttonHost = root) {
         this.root = root;
         root.prepend(this.banner);
-        root.appendChild(this.button);
+        buttonHost.appendChild(this.button);
         root.appendChild(this.overlay);
         root.classList.toggle("settings-open", !this.overlay.hidden);
     }
@@ -177,11 +177,13 @@ class SettingsPanel {
             const name = SettingsPanel._input("text", r.name, { placeholder: "name" });
             const origin = SettingsPanel._input("text", r.origin, { placeholder: "origin lat,lon" });
             const destination = SettingsPanel._input("text", r.destination, { placeholder: "destination lat,lon" });
+            const hero = SettingsPanel._input("text", Array.isArray(r.hero) ? r.hero.join(", ") : r.hero, { placeholder: "hero window, e.g. 06:30-09:30" });
+            hero.className = "tg-route-hero";
             const remove = SettingsPanel._el("button", "tg-settings-action", "Remove");
             remove.type = "button";
-            const entry = { id, name, origin, destination, row };
+            const entry = { id, name, origin, destination, hero, row };
             remove.addEventListener("click", () => { row.remove(); rows.splice(rows.indexOf(entry), 1); });
-            row.append(id, name, origin, destination, remove);
+            row.append(id, name, origin, destination, hero, remove);
             rows.push(entry);
         };
         const addBtn = SettingsPanel._el("button", "tg-settings-action", "Add route");
@@ -195,7 +197,7 @@ class SettingsPanel {
         (Array.isArray(value) ? value : []).forEach(r => addRow(r, false));
         return {
             node: wrap,
-            read: () => rows.map(r => ({ id: r.id.value, name: r.name.value, origin: r.origin.value, destination: r.destination.value }))
+            read: () => rows.map(r => ({ id: r.id.value, name: r.name.value, origin: r.origin.value, destination: r.destination.value, hero: r.hero.value }))
         };
     }
 }
