@@ -1,20 +1,16 @@
 var ColorTheme = {
     traffic: {
         good: '#2ecc71',
-        warning: '#f39c12',
-        critical: '#c0392b',
-        criticalAlt: '#e91e63',
-        neutral: '#4fc3f7',
-        roadwork: '#f39c12',
-        closure: '#9b59b6'
+        warning: '#f5a623',
+        critical: '#ff4d6d',
+        jam: '#ff6b6b',
+        roadwork: '#f5a623',
+        closure: '#b57bff'
     },
 
     ui: {
         baseline: '#888888',
-        textPrimary: '#ffffff',
-        textSecondary: '#aaaaaa',
-        backgroundDark: '#1a1a2e',
-        border: 'rgba(255, 255, 255, 0.1)'
+        textSecondary: '#aaaaaa'
     },
 
     hexToRgba: function(hex, alpha) {
@@ -41,13 +37,14 @@ var ColorTheme = {
 
     getRouteColor: function(route, thresholds) {
         var cls = this.getRouteColorClass(route, thresholds);
-        return { green: this.traffic.good, yellow: this.traffic.warning, red: this.traffic.criticalAlt }[cls];
+        return { green: this.traffic.good, yellow: this.traffic.warning, red: this.traffic.critical }[cls];
     },
 
     getIncidentColor: function(category, magnitude) {
         if (category === 'ROAD_CLOSURE') return this.traffic.closure;
         if (category === 'ROAD_WORK') return this.traffic.roadwork;
-        return magnitude === 4 ? this.traffic.critical : '#e74c3c';
+        return magnitude === 4 ? this.traffic.critical : this.traffic.jam;
     },
 
+    incidentGlyph: { JAM: '▼', ROAD_WORK: '◆', ROAD_CLOSURE: '■', OTHER: '●' }
 };

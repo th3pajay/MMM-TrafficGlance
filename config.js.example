@@ -5,28 +5,30 @@
     config: {
         apiKey: "YOUR_TOMTOM_API_KEY_HERE",
         routes: [
-            { id: "to-work", name: "Work", origin: "48.8584,2.2945", destination: "48.8606,2.3376" },
-            { id: "to-home", name: "Home", origin: "48.8606,2.3376", destination: "48.8584,2.2945" }
+            { id: "to-work", name: "Work", origin: "48.8584,2.2945", destination: "48.8606,2.3376", hero: "06:30-09:30" },   // hero: window(s) when this route is featured; string or list
+            { id: "to-home", name: "Home", origin: "48.8606,2.3376", destination: "48.8584,2.2945", hero: ["16:00-19:00"] }
         ],
 
         refreshMinutes: 5,        // floor; polling auto-slows to fit monthlyQuota
         monthlyQuota: 20000,      // your Routing API calls per month; 0 = poll exactly every refreshMinutes
-        width: 350,               // px, 0 = no limit
+        width: 420,               // px, 0 = no limit
+        scale: 1,                 // whole-module size multiplier, 0.5 - 3
 
         map: "leaflet",           // "leaflet" | "leaflet-fr" | "leaflet-tomtom" | "svg" | false
-        mapHeight: 220,           // px
+        mapHeight: 312,           // px
         sparkline: true,          // true | false | "curved" | "stepped"
         incidents: true,          // true | false | ["JAM", "ROAD_WORK", "ROAD_CLOSURE", "OTHER"]
 
         showDelta: true,          // "+2m" vs historical average
         showTrend: true,          // up/down/stable arrow
+        animations: true,         // count-up numbers, growing strips, pings; false for slow hardware
         warnAt: 10,               // % slower than usual -> yellow
         criticalAt: 25            // % slower than usual -> red
 
         // advanced: {            // optional, same names as the internal config; overrides everything above
         //     api: { routeType: "fastest", travelMode: "car", avoid: [], timeout: 10000 },
-        //     map: { zoom: null, center: null, padding: [20, 20], zoomControlSize: 22, showScale: true },
-        //     sparkline: { width: 160, height: 40, maxDataPoints: 50, lookbackHours: 48, colors: { good: "#2ecc71" } }
+        //     map: { zoom: null, center: null, padding: [20, 20], zoomControlSize: 26, showScale: true },
+        //     sparkline: { width: 192, height: 48, maxDataPoints: 50, lookbackHours: 48, colors: { good: "#2ecc71" } }
         // }
     }
 }

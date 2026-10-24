@@ -15,12 +15,14 @@ class MapRenderer {
             if (el) el.style.setProperty("--tg-zoom-size", zcs + "px");
         }
         this.map = L.map(containerId, {
-            zoomControl: true,
+            zoomControl: false,
             attributionControl: true,
             dragging: false,
             scrollWheelZoom: true,
-            touchZoom: false
+            touchZoom: false,
+            zoomSnap: 0.25
         });
+        L.control.zoom({ position: 'bottomleft' }).addTo(this.map);
         this.routeLayer = L.layerGroup().addTo(this.map);
         const { url, ...tileOptions } = MapRenderer.PROVIDERS[this.config.map?.tileProvider] ?? MapRenderer.PROVIDERS.osm;
         this.tileLayer = L.tileLayer(url, {
@@ -70,60 +72,68 @@ class MapRenderer {
         }
     }
 
-    draw(trafficData) {
+    static _esc(text) {
+        return String(text ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    }
+
+    draw(trafficData, opts = {}) {
         if (!this.map || !trafficData?.length) return;
-        const allPoints = [], seen = new Set();
+        this.routeLayer.clearLayers();
+        const allPoints = [], origins = new Map(), next = new Map();
+        const animate = this.config.display?.animations !== false;
+        const base = { lineJoin: 'round', lineCap: 'round', interactive: false };
 
         trafficData.forEach(route => {
-            seen.add(route.id);
-            const color = ColorTheme.getRouteColor(route, this.config.thresholds);
             const latLngs = route.polyline
                 ? route.polyline.map(p => [p.latitude, p.longitude])
-                : this._layers.get(route.id)?.latLngs ?? [];
+                : this._layers.get(route.id) ?? [];
             if (!latLngs.length) return;
+            next.set(route.id, latLngs);
             allPoints.push(...latLngs);
+            origins.set(latLngs[0].join(","), latLngs[0]);
 
-            const existing = this._layers.get(route.id);
-            if (existing) {
-                existing.line.setLatLngs(latLngs).setStyle({ color });
-                existing.incidents.forEach(b => this.routeLayer.removeLayer(b));
-                existing.markers.forEach(m => this.routeLayer.removeLayer(m));
-            } else {
-                const line = L.polyline(latLngs, { color, weight: 5, opacity: 0.9, lineJoin: 'round', lineCap: 'round' }).addTo(this.routeLayer);
-                this._layers.set(route.id, { line, latLngs, incidents: [], markers: [] });
-            }
+            const cls = ColorTheme.getRouteColorClass(route, this.config.thresholds);
+            const color = ColorTheme.getRouteColor(route, this.config.thresholds);
+            const hero = route.id === opts.heroId;
+            L.polyline(latLngs, { ...base, color: '#000', weight: hero ? 12 : 10, opacity: 0.75 }).addTo(this.routeLayer);
+            L.polyline(latLngs, { ...base, color, weight: hero ? 7 : 5, opacity: 0.95 }).addTo(this.routeLayer);
 
-            const entry = this._layers.get(route.id);
-            entry.latLngs = latLngs;
-            entry.incidents = (route.incidents ?? []).map(s => {
+            (route.incidents ?? []).forEach(s => {
                 const seg = latLngs.slice(s.startPointIndex, s.endPointIndex + 1);
-                const closure = s.category === 'ROAD_CLOSURE';
-                return L.polyline(seg, {
-                    color: ColorTheme.getIncidentColor(s.category, s.magnitude),
-                    weight: 7, opacity: 1, lineCap: 'round',
-                    dashArray: closure ? '2, 8' : s.category === 'ROAD_WORK' ? '10, 6' : null
+                if (seg.length < 2) return;
+                L.polyline(seg, {
+                    ...base, color: ColorTheme.getIncidentColor(s.category, s.magnitude), weight: hero ? 8 : 6, opacity: 1,
+                    dashArray: s.category === 'ROAD_CLOSURE' ? '2, 8' : s.category === 'ROAD_WORK' ? '10, 6' : null
                 }).addTo(this.routeLayer);
             });
-            entry.markers = this.config.map.showIncidentMarkers === false ? [] : (route.incidents ?? []).map(s => {
+
+            if (animate) L.polyline(latLngs, { ...base, color: '#fff', weight: 2, dashArray: '2 12', className: `tg-flow tg-flow-${cls}` }).addTo(this.routeLayer);
+
+            if (this.config.map.showIncidentMarkers !== false) (route.incidents ?? []).forEach(s => {
                 const seg = latLngs.slice(s.startPointIndex, s.endPointIndex + 1);
                 const pt = seg[Math.floor(seg.length / 2)] ?? seg[0];
-                if (!pt) return null;
-                return L.circleMarker(pt, {
-                    radius: 6, color: '#fff', weight: 1,
-                    fillColor: ColorTheme.getIncidentColor(s.category, s.magnitude), fillOpacity: 0.95
+                if (!pt) return;
+                L.marker(pt, {
+                    keyboard: false,
+                    icon: L.divIcon({ className: '', iconSize: [12, 12], iconAnchor: [6, 6], html: `<span class="tg-inc" style="background:${ColorTheme.getIncidentColor(s.category, s.magnitude)}"></span>` })
                 }).bindTooltip(MapRenderer._incidentLabel(s), { direction: 'top' }).addTo(this.routeLayer);
-            }).filter(Boolean);
+            });
+
+            L.marker(latLngs[latLngs.length - 1], {
+                interactive: false, keyboard: false, zIndexOffset: hero ? 1000 : 0,
+                icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<span class="tg-badge tg-${cls}">${MapRenderer._esc(route.name)} ${route.currentDuration}′</span>` })
+            }).addTo(this.routeLayer);
         });
 
-        for (const [id, entry] of this._layers) {
-            if (!seen.has(id)) {
-                this.routeLayer.removeLayer(entry.line);
-                entry.incidents.forEach(b => this.routeLayer.removeLayer(b));
-                entry.markers.forEach(m => this.routeLayer.removeLayer(m));
-                this._layers.delete(id);
-            }
+        for (const pt of origins.values()) {
+            L.marker(pt, { interactive: false, keyboard: false, icon: L.divIcon({ className: '', iconSize: [10, 10], iconAnchor: [5, 5], html: '<span class="tg-home"></span>' }) }).addTo(this.routeLayer);
         }
+        this._layers = next;
 
-        if (allPoints.length) this.map.fitBounds(L.latLngBounds(allPoints), { padding: this.config.map.padding || [20, 20] });
+        if (!allPoints.length) return;
+        const pad = this.config.map.padding || [20, 20];
+        this.map.fitBounds(L.latLngBounds(allPoints), opts.paddingTopLeft
+            ? { paddingTopLeft: opts.paddingTopLeft, paddingBottomRight: pad }
+            : { padding: pad });
     }
 }
