@@ -1,7 +1,5 @@
 const NodeHelper = require("node_helper");
-// node:sqlite requires Node >=22.5; add --experimental-sqlite to MM start cmd if on Node 22.5-22.10
-const { DatabaseSync } = require("node:sqlite");
-const { resolvePacedIntervalMs, startOfUtcMonth } = require("./quotaPacing");
+const { resolvePacedIntervalMs } = require("./quotaPacing");
 const configFile = require("./configFile");
 const basemapService = require("./basemapService");
 
@@ -11,62 +9,29 @@ module.exports = NodeHelper.create({
         this.nextMidnightUTC = 0;
         this._busy = false;
         this._lastCleanup = 0;
+        this._recent = new Map();
     },
 
     stop() {
         if (this.intervalId) clearTimeout(this.intervalId);
         if (this._midnightId) clearInterval(this._midnightId);
-        this.db?.close?.();
+        this.store?.close();
     },
 
-    _initDb() {
-        this.db = new DatabaseSync(__dirname + "/traffic.db");
-        const v = this.db.prepare("PRAGMA user_version").get().user_version;
-        if (v < 1) {
-            this.db.exec("DROP TABLE IF EXISTS traffic_history");
-            this.db.exec("PRAGMA user_version=1");
+    _initStore() {
+        try {
+            const { TrafficStore, routeKey } = require("./trafficStore");
+            this._routeKey = routeKey;
+            const legacyKeys = new Map(this.config.routes.map(r => [r.id, routeKey(r, this.config.api)]));
+            this.store = TrafficStore.open(__dirname + "/traffic.db", { legacyKeys });
+        } catch (e) {
+            this.store = null;
+            console.warn("[MMM-TrafficGlance] history disabled, traffic.db unavailable:", e.message);
         }
-        this.db.exec("CREATE TABLE IF NOT EXISTS traffic_history(route_id TEXT,travel_time INTEGER,timestamp INTEGER)");
-        this.db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_rt ON traffic_history(route_id,timestamp)");
-        this.db.exec("DROP INDEX IF EXISTS idx_traffic_ts");
-        this.db.exec("CREATE TABLE IF NOT EXISTS incident_history(route_id TEXT,timestamp INTEGER,category TEXT,magnitude INTEGER,delay_seconds INTEGER)");
-        this.db.exec("CREATE INDEX IF NOT EXISTS idx_incident_rt ON incident_history(route_id,timestamp)");
-        this._ins = this.db.prepare("INSERT OR IGNORE INTO traffic_history VALUES(?,?,?)");
-        this._sel = this.db.prepare("SELECT travel_time,timestamp FROM traffic_history WHERE route_id=? AND timestamp>=? ORDER BY timestamp DESC LIMIT ?");
-        this._insIncident = this.db.prepare("INSERT INTO incident_history VALUES(?,?,?,?,?)");
-        this._selIncident = this.db.prepare("SELECT timestamp,category,magnitude FROM incident_history WHERE route_id=? AND timestamp>=? ORDER BY timestamp");
-        this._selCallsThisMonth = this.db.prepare("SELECT COUNT(*) n FROM traffic_history WHERE timestamp>=?");
     },
 
-    _sparkline(routeId) {
-        if (!this.db) return { points: [], baseline: null, stdDev: null, incidents: [] };
-        const hours = this.config.sparkline?.lookbackHours ?? 48;
-        const max = this.config.sparkline?.maxDataPoints ?? 50;
-        const cutoff = Math.floor(Date.now() / 1000) - hours * 3600;
-        const rows = this._sel.all(routeId, cutoff, max).reverse();
-        if (!rows.length) return { points: [], baseline: null, stdDev: null, incidents: [] };
-        const vals = rows.map(r => Math.round(r.travel_time / 60));
-        const baseline = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-        const sd = Math.sqrt(vals.reduce((s, v) => s + (v - baseline) ** 2, 0) / vals.length);
-        const timestamps = rows.map(r => r.timestamp);
-        const severity = { ROAD_CLOSURE: 3, JAM: 2, ROAD_WORK: 1, OTHER: 0 };
-        const byPoint = new Map();
-        for (const inc of this._selIncident.all(routeId, cutoff)) {
-            let nearest = 0, best = Infinity;
-            for (let i = 0; i < timestamps.length; i++) {
-                const d = Math.abs(timestamps[i] - inc.timestamp);
-                if (d < best) { best = d; nearest = i; }
-            }
-            const rank = severity[inc.category] ?? 0;
-            const existing = byPoint.get(nearest);
-            if (!existing || rank > existing.rank) byPoint.set(nearest, { pointIndex: nearest, category: inc.category, magnitude: inc.magnitude, timestamp: inc.timestamp, rank });
-        }
-        return {
-            points: rows.map((r, i) => ({ timestamp: r.timestamp, value: vals[i], zScore: sd > 0 ? (vals[i] - baseline) / sd : 0 })),
-            baseline,
-            stdDev: sd,
-            incidents: [...byPoint.values()].map(({ pointIndex, category, magnitude, timestamp }) => ({ pointIndex, category, magnitude, timestamp }))
-        };
+    _keyOf(route) {
+        return this._routeKey(route, this.config.api);
     },
 
     async _fetch(route) {
@@ -80,6 +45,7 @@ module.exports = NodeHelper.create({
         if (avoid) params.avoid = avoid;
         const origin = String(route.origin).replace(/\s+/g, "");
         const dest = String(route.destination).replace(/\s+/g, "");
+        this.store?.recordCall();
         const res = await fetch(
             `https://api.tomtom.com/routing/1/calculateRoute/${origin}:${dest}/json?${new URLSearchParams(params)}`,
             { signal: AbortSignal.timeout(api.timeout ?? 10000) }
@@ -98,10 +64,7 @@ module.exports = NodeHelper.create({
         if (!r) return null;
         const s = r.summary;
         const polyline = r.legs?.flatMap(leg => leg.points) ?? [];
-        const now = Math.floor(Date.now() / 1000);
-        if (this.db) this._ins.run(route.id, s.travelTimeInSeconds, now);
         const live = Math.round(s.travelTimeInSeconds / 60);
-        const hist = Math.round(s.historicTrafficTravelTimeInSeconds / 60);
         const ntt = s.noTrafficTravelTimeInSeconds;
         const along = this._cumulativeDistance(polyline);
         const total = along[along.length - 1] || 0;
@@ -111,20 +74,30 @@ module.exports = NodeHelper.create({
             .filter(x => !api.incidentCategories || api.incidentCategories.includes(x.simpleCategory))
             .map(({ startPointIndex, endPointIndex, magnitudeOfDelay: magnitude, simpleCategory: category, delayInSeconds: delaySeconds }) =>
                 ({ startPointIndex, endPointIndex, magnitude, category, delaySeconds, position: positionOf(startPointIndex, endPointIndex) }));
-        if (this.db) for (const inc of incidents) this._insIncident.run(route.id, now, inc.category, inc.magnitude, inc.delaySeconds);
-        const sparklineData = this._sparkline(route.id);
+        const key = this.store ? this._keyOf(route) : null;
+        this.store?.record(key, s.travelTimeInSeconds, incidents);
+        const usual = this._usual(key, s.historicTrafficTravelTimeInSeconds);
         return {
             id: route.id, name: route.name,
-            currentDuration: live, historicalAverage: hist,
+            currentDuration: live,
+            historicalAverage: usual.minutes,
+            usualSource: usual.source,
             freeFlowDuration: ntt > 0 ? Math.round(ntt / 60) : null,
             distanceKm: s.lengthInMeters ? Math.round(s.lengthInMeters / 100) / 10 : null,
             arrivalTime: s.arrivalTime ?? null,
             delayFactor: ntt > 0 ? s.travelTimeInSeconds / ntt : 1,
-            trendDirection: this._trend(route.id, live, sparklineData.points),
+            trendDirection: this._trend(key ?? route.id, live),
             incidents,
             polyline,
-            sparklineData
+            sparklineData: this.store ? this.store.sparkline(key, this.config.sparkline) : { points: [], baseline: null, stdDev: null, incidents: [] }
         };
+    },
+
+    _usual(key, tomtomSeconds) {
+        const own = this.store?.usualAt(key);
+        if (own != null) return { minutes: Math.round(own / 60), source: "history" };
+        if (tomtomSeconds > 0) return { minutes: Math.round(tomtomSeconds / 60), source: "tomtom" };
+        return { minutes: null, source: null };
     },
 
     _cumulativeDistance(polyline) {
@@ -137,11 +110,12 @@ module.exports = NodeHelper.create({
         return out;
     },
 
-    _trend(routeId, live, points) {
-        this._recent ??= new Map();
-        const recent = points.length >= 2 ? points.map(p => p.value) : [...(this._recent.get(routeId) ?? []), live];
-        this._recent.set(routeId, recent.slice(-4));
-        const prior = recent.slice(-4, -1);
+    _trend(key, live) {
+        const recent = this.store
+            ? this.store.recent(key, 4).map(t => Math.round(t / 60))
+            : [...(this._recent.get(key) ?? []), live].slice(-4);
+        if (!this.store) this._recent.set(key, recent);
+        const prior = recent.slice(0, -1);
         if (!prior.length) return "stable";
         const diff = live - prior.reduce((a, b) => a + b, 0) / prior.length;
         return diff >= 1 ? "up" : diff <= -1 ? "down" : "stable";
@@ -154,17 +128,13 @@ module.exports = NodeHelper.create({
             return;
         }
         this._busy = true;
-        const now = Date.now();
-        if (this.db && now - this._lastCleanup > 86400000) {
-            const cutoff = Math.floor(now / 1000) - 90 * 86400;
-            this.db.prepare("DELETE FROM traffic_history WHERE timestamp<?").run(cutoff);
-            this.db.prepare("DELETE FROM incident_history WHERE timestamp<?").run(cutoff);
-            this._lastCleanup = now;
+        if (this.store && Date.now() - this._lastCleanup > 86400000) {
+            this.store.prune({ lookbackHours: this.config.sparkline?.lookbackHours });
+            this._lastCleanup = Date.now();
         }
         try {
             const routes = [];
             for (const [i, r] of this.config.routes.entries()) {
-                // Serialised with a gap between calls to stay under TomTom's QPS limit.
                 if (i > 0) await new Promise(res => setTimeout(res, 300));
                 const data = await this._fetch(r).catch(e => {
                     if (e.quota || e.auth) throw e;
@@ -200,11 +170,9 @@ module.exports = NodeHelper.create({
     _nextIntervalMs() {
         const configured = Math.max(60000, this.config.updateInterval ?? 300000);
         const routesCount = Array.isArray(this.config.routes) ? this.config.routes.length : 0;
-        if (!this.db || !routesCount) return configured;
+        if (!this.store || !routesCount) return configured;
         const now = Date.now();
-        const monthStart = Math.floor(startOfUtcMonth(new Date(now)) / 1000);
-        const callsThisMonth = this._selCallsThisMonth.get(monthStart).n;
-        const paced = resolvePacedIntervalMs(this.config.api, { routesCount, callsThisMonth, now, configuredIntervalMs: configured });
+        const paced = resolvePacedIntervalMs(this.config.api, { routesCount, callsThisMonth: this.store.callsThisMonth(now), now, configuredIntervalMs: configured });
         return paced === null ? configured : Math.round(paced);
     },
 
@@ -236,7 +204,7 @@ module.exports = NodeHelper.create({
         if (notification !== "CONFIG") return;
         if (this.intervalId) clearTimeout(this.intervalId);
         this.config = payload;
-        if (!this.db) try { this._initDb(); } catch { this.db = null; }
+        if (this.store === undefined && Array.isArray(this.config.routes)) this._initStore();
         this._runLoop();
     }
 });

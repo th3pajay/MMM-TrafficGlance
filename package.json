@@ -1,11 +1,8 @@
 {
   "name": "MMM-TrafficGlance",
-  "version": "1.2.01",
-  "description": "High-density traffic visualization with historical trend analysis and satellite map overlays.",
+  "version": "1.2.09",
+  "description": "Real-time TomTom traffic for MagicMirror² with a learned per-route baseline, sparklines and a live route map.",
   "main": "MMM-TrafficGlance.js",
-  "scripts": {
-    "test": "node --test"
-  },
   "keywords": ["magicmirror", "module", "traffic", "tomtom", "openstreetmap", "planning"],
   "author": "th3pajay",
   "license": "MIT",
