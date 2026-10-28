@@ -2,6 +2,7 @@
     "use strict";
 
     const INCIDENT_CATEGORIES = ["JAM", "ROAD_WORK", "ROAD_CLOSURE", "OTHER"];
+    const INCIDENT_SEVERITY = { ROAD_CLOSURE: 3, JAM: 2, ROAD_WORK: 1, OTHER: 0 };
     const MAP_PRESETS = {
         leaflet: { renderer: "leaflet", tileProvider: "osm" },
         "leaflet-fr": { renderer: "leaflet", tileProvider: "osmfr" },
@@ -130,7 +131,7 @@
         };
     }
 
-    const api = { normalize, toSimple, INCIDENT_CATEGORIES };
+    const api = { normalize, toSimple, INCIDENT_CATEGORIES, INCIDENT_SEVERITY };
     root.TrafficGlanceConfig = api;
     if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

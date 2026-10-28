@@ -3,7 +3,7 @@
 Real-time traffic for MagicMirror² with TomTom routing, historical sparklines and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.2.01-yellow)
+![Version](https://img.shields.io/badge/Version-1.2.09-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -99,12 +99,21 @@ Put these inside `advanced`, e.g. `advanced: { api: { travelMode: "truck" }, map
 | `map.center` | `null` | Fixed `[lat, lon]`, or auto-fit |
 | `map.padding` | `[20, 20]` | Auto-fit padding `[vertical, horizontal]` px |
 | `map.showScale` | `true` | Distance scale bar |
-| `map.zoomControlSize` | `26` | +/- button size px |
+| `map.zoomControlSize` | `26` | Deprecated and ignored: the zoom control is a 20 px pill above the scale |
 | `sparkline.width` / `sparkline.height` | `192` / `48` | Minimum canvas size in px; the chart expands to fill the row |
-| `sparkline.lookbackHours` | `48` | History window |
-| `sparkline.maxDataPoints` | `50` | Max points rendered |
+| `sparkline.lookbackHours` | `48` | Window shown in the sparkline |
+| `sparkline.maxDataPoints` | `50` | The window is averaged into this many points |
 | `sparkline.show*` (`Baseline`, `BaselineLabel`, `NowIndicator`, `NowLabel`, `XAxisLabels`), `useZScoreColors` | `true` | Individual elements |
 | `sparkline.colors` | `{}` | `{ critical, warning, good, baseline }` hex colours |
+
+</details>
+
+<details>
+<summary><h2>History and "usual"</h2></summary>
+
+Every poll is stored in `traffic.db` in the module folder. From it the module learns what is usual for each route per weekday and 15-minute slot: the median of the last 8 same weekdays. Once a slot has 3 weeks of samples, this own baseline drives the delta, the colours, the "usual" tick on the strip and the dashed "Usual" line in the sparkline. Until then TomTom's historic travel time is used.
+
+History is keyed on the route itself (origin, destination, travel mode, route type, avoid, traffic), so renaming a route keeps it and changing the route starts a fresh baseline. Raw polls are kept 7 days (or `lookbackHours`, if longer), baseline slots 8 weeks. Every TomTom request is counted for `monthlyQuota` pacing, failed ones included. Databases from earlier versions are migrated on first start.
 
 </details>
 
@@ -115,7 +124,8 @@ Put these inside `advanced`, e.g. `advanced: { api: { travelMode: "truck" }, map
 |---------|------------|
 | No data / retrying | Check API key and network, then `pm2 restart MagicMirror` |
 | No map | Module narrower than 320 px, or `map: false` |
-| Sparklines empty | History builds over a few polls; full baseline takes hours |
+| Sparklines empty | History builds over a few polls; the own "usual" takes 3 weeks per weekday slot |
+| `history disabled` in logs | `node:sqlite` unavailable: Node older than 22.5, or 22.5 to 22.10 without `--experimental-sqlite` |
 
 Logs: `pm2 logs MagicMirror`
 

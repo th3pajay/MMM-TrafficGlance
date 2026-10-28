@@ -5,7 +5,6 @@ Module.register("MMM-TrafficGlance", {
     getScripts: () => ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "configNormalizer.js", "ColorTheme.js", "MapRenderer.js", "SvgMapRenderer.js", "TemplateEngine.js", "SettingsPanel.js"],
 
     NARROW_PX: 320,
-    SEVERITY: { ROAD_CLOSURE: 3, JAM: 2, ROAD_WORK: 1, OTHER: 0 },
 
     start() {
         this.config = TrafficGlanceConfig.normalize(this.config);
@@ -63,7 +62,6 @@ Module.register("MMM-TrafficGlance", {
         w.classList.toggle("tg-nomap", !showMap);
         if (this.config.maxWidth) w.style.setProperty("--tg-max", this.config.maxWidth);
         if (this.config.scale && this.config.scale !== 1) w.style.zoom = this.config.scale;
-        w.style.setProperty("--tg-zoom-size", this.config.map.zoomControlSize + "px");
         w.style.setProperty("--tg-map-height", this.config.map.height);
         w.innerHTML = `<div class="tg-mapblk">${showMap ? '<div id="traffic-map-container"></div>' : ""}<div class="tg-hero"></div><span class="tg-stamp"></span></div>`
             + '<div class="tg-band"><div class="tg-rows"></div><div class="tg-axis"><span class="tg-axis-tools"></span><span class="tg-axis-scale"></span></div></div>';
@@ -176,8 +174,9 @@ Module.register("MMM-TrafficGlance", {
 
     _incidents(r) {
         if (!this.config.api?.incidents || !r.incidents?.length) return [];
+        const severity = TrafficGlanceConfig.INCIDENT_SEVERITY;
         return [...r.incidents].sort((a, b) =>
-            (this.SEVERITY[b.category] ?? 0) - (this.SEVERITY[a.category] ?? 0)
+            (severity[b.category] ?? 0) - (severity[a.category] ?? 0)
             || (b.magnitude ?? 0) - (a.magnitude ?? 0)
             || (b.delaySeconds ?? 0) - (a.delaySeconds ?? 0));
     },
@@ -261,7 +260,7 @@ Module.register("MMM-TrafficGlance", {
                 + (ff ? `<i class="tg-strip-ff" style="width:${wid(Math.min(ff, prev))}" data-w="${wid(ff)}"></i>` : "")
                 + '<i class="tg-strip-start"></i>'
                 + `<i class="tg-strip-end" style="left:${pos(prev)}" data-l="${pos(now)}"></i>`
-                + (r.historicalAverage ? `<i class="tg-strip-usual" style="left:${pos(r.historicalAverage)}" data-u="usual ${r.historicalAverage}"></i>` : "")
+                + (r.historicalAverage ? `<i class="tg-strip-usual" style="left:${pos(r.historicalAverage)}" data-u="usual ${r.historicalAverage}${r.usualSource === "history" ? " · learned" : ""}"></i>` : "")
                 + incs
                 + `<span class="tg-strip-tail" style="left:${pos(prev)}" data-l="${pos(now)}">${tail}</span>`
                 + "</span></div>";

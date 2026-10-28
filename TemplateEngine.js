@@ -21,21 +21,32 @@ class SparklineEngine {
         const axisMargin = showAxis ? 12 : 0;
         const chartH = this.h - axisMargin;
 
-        const vals = valid.map(p => p.value);
-        const dmax = Math.max(...vals), dmin = Math.min(...vals);
-        const pad = (dmax - dmin) * 0.15 || 1;
-        const max = Math.max(dmax, baseline ?? dmax) + pad;
-        const min = Math.min(dmin, baseline ?? dmin) - pad;
+        const usuals = SparklineEngine._fillGaps(valid.map(p => p.usual ?? null));
+        const hasUsual = usuals.some(u => u !== null);
+        const refs = hasUsual ? usuals : valid.map(() => baseline);
+        let vmin = Infinity, vmax = -Infinity, rmin = Infinity, rmax = -Infinity;
+        for (let i = 0; i < valid.length; i++) {
+            const v = valid[i].value, r = refs[i];
+            if (v < vmin) vmin = v;
+            if (v > vmax) vmax = v;
+            if (r !== null) {
+                if (r < rmin) rmin = r;
+                if (r > rmax) rmax = r;
+            }
+        }
+        const pad = (vmax - vmin) * 0.15 || 1;
+        const max = Math.max(vmax, rmax) + pad;
+        const min = Math.min(vmin, rmin) - pad;
         const range = max - min;
         if (!isFinite(range) || range === 0) { this._degenerate(valid[0].value, baseline, true); return; }
 
         const step = this.w / (valid.length - 1);
         const toY = v => chartH - ((v - min) / range * chartH);
-        const coords = valid.map((p, i) => ({ x: i * step, y: toY(p.value), z: p.zScore ?? 0, t: p.timestamp }));
-        const baseY = baseline !== null ? toY(baseline) : null;
+        const coords = valid.map((p, i) => ({ x: i * step, y: toY(p.value), ry: refs[i] !== null ? toY(refs[i]) : null, z: p.zScore ?? 0, t: p.timestamp }));
+        const hasRef = refs[0] !== null;
 
-        if (baseY !== null && this.config?.sparkline?.showBaseline !== false) this._baseline(baseY, baseline);
-        if (baseY !== null) this._deltaFill(coords, baseY);
+        if (hasRef && this.config?.sparkline?.showBaseline !== false) this._baseline(coords, refs[0], hasUsual ? "Usual" : "Avg");
+        if (hasRef) this._deltaFill(coords);
         this._trace(coords, stdDev);
         if (this.config?.sparkline?.showNowIndicator !== false) this._node(coords[coords.length - 1]);
         if (showAxis) this._xAxisLabels(coords);
@@ -113,7 +124,14 @@ class SparklineEngine {
 
     _zColor(z) { const c = this._colors(); return z < 1 ? c.good : z < 2 ? c.warning : c.critical; }
 
-    _baseline(baseY, value) {
+    static _fillGaps(values) {
+        const out = values.slice();
+        for (let i = 1; i < out.length; i++) if (out[i] === null) out[i] = out[i - 1];
+        for (let i = out.length - 2; i >= 0; i--) if (out[i] === null) out[i] = out[i + 1];
+        return out;
+    }
+
+    _baseline(coords, value, label) {
         const c = this._colors();
         this.ctx.save();
         this.ctx.setLineDash([3, 3]);
@@ -121,14 +139,17 @@ class SparklineEngine {
         this.ctx.globalAlpha = 0.6;
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
-        this.ctx.moveTo(0, baseY); this.ctx.lineTo(this.w, baseY);
+        this.ctx.moveTo(0, coords[0].ry);
+        coords.forEach(p => this.ctx.lineTo(p.x, p.ry));
+        this.ctx.lineTo(this.w, coords[coords.length - 1].ry);
         this.ctx.stroke();
         if (this.config?.sparkline?.showBaselineLabel !== false && this.w >= 80) {
+            const y = coords[0].ry;
             this.ctx.font = "bold 10px sans-serif";
             this.ctx.fillStyle = c.baseline;
             this.ctx.globalAlpha = 0.8;
             this.ctx.textAlign = "left";
-            this.ctx.fillText(`Avg: ${Math.round(value)}m`, 2, baseY > 12 ? baseY - 3 : baseY + 10);
+            this.ctx.fillText(`${label}: ${Math.round(value)}m`, 2, y > 12 ? y - 3 : y + 10);
         }
         this.ctx.restore();
     }
@@ -179,15 +200,16 @@ class SparklineEngine {
         this.ctx.stroke();
     }
 
-    _deltaFill(coords, baseY) {
+    _deltaFill(coords) {
         if (coords.length < 2) return;
-        const isAbove = coords[coords.length - 1].y < baseY;
+        const last = coords[coords.length - 1];
+        const isAbove = last.y < last.ry;
         this.ctx.save();
         this.ctx.beginPath();
-        this.ctx.moveTo(coords[0].x, baseY);
+        this.ctx.moveTo(coords[0].x, coords[0].ry);
         this.ctx.lineTo(coords[0].x, coords[0].y);
         this._tracePath(coords, this._lineStyle());
-        this.ctx.lineTo(coords[coords.length - 1].x, baseY);
+        for (let i = coords.length - 1; i >= 0; i--) this.ctx.lineTo(coords[i].x, coords[i].ry);
         this.ctx.closePath();
         this.ctx.fillStyle = ColorTheme.hexToRgba(this._colors(isAbove).line, 0.15);
         this.ctx.fill();
@@ -257,7 +279,7 @@ class SparklineEngine {
 
     _degenerate(value, baseline, drawLine) {
         const c = this._colors(baseline !== null && value > baseline);
-        if (baseline !== null) this._baseline(this.h / 2, baseline);
+        if (baseline !== null) this._baseline([{ x: 0, ry: this.h / 2 }], baseline, "Avg");
         this.ctx.lineWidth = 1.5;
         if (drawLine) {
             this.ctx.beginPath(); this.ctx.strokeStyle = c.line;

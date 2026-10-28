@@ -30,8 +30,6 @@ class SvgMapRenderer {
     }
 
     _build() {
-        const zcs = this.config.map && this.config.map.zoomControlSize;
-        if (typeof zcs === "number" && zcs > 0) this.container.style.setProperty("--tg-zoom-size", zcs + "px");
         this.root = document.createElement("div");
         this.root.className = "tg-svg-map";
         this.svg = SvgMapRenderer._el("svg", { class: "tg-svg", preserveAspectRatio: "xMidYMid slice" }, this.root);
@@ -40,16 +38,8 @@ class SvgMapRenderer {
         this.incidentGroup = SvgMapRenderer._el("g", { class: "tg-incidents" }, this.svg);
         this.markerGroup = SvgMapRenderer._el("g", { class: "tg-markers" }, this.svg);
 
-        const zoom = document.createElement("div");
-        zoom.className = "tg-svg-zoom";
-        [["+", 0.7], ["−", 1 / 0.7]].forEach(([label, factor]) => {
-            const b = document.createElement("button");
-            b.type = "button";
-            b.textContent = label;
-            b.addEventListener("click", () => this._zoomBy(factor, 0.5, 0.5));
-            zoom.appendChild(b);
-        });
-        this.root.appendChild(zoom);
+        this._zoom = MapRenderer.zoomPill(delta => this.zoomBy(delta));
+        this.root.appendChild(this._zoom.el);
 
         const attr = document.createElement("div");
         attr.className = "tg-svg-attribution";
@@ -91,6 +81,7 @@ class SvgMapRenderer {
             this._userView = false;
             this.view = { ...this.home };
             this._applyView();
+            this._updateZoom();
         };
         this.svg.addEventListener("pointerdown", this._onPointerDown);
         this.svg.addEventListener("pointermove", this._onPointerMove);
@@ -154,6 +145,20 @@ class SvgMapRenderer {
             this._userView = true;
         }
         this._scheduleApply();
+        this._updateZoom();
+    }
+
+    _updateZoom() {
+        this._zoom?.set(this.getZoom());
+    }
+
+    getZoom() {
+        if (!this.home || !this.view) return null;
+        return this.home.w / this.view.w;
+    }
+
+    zoomBy(delta) {
+        this._zoomBy(0.5 ** delta, 0.5, 0.5);
     }
 
     _fit(points) {
@@ -174,6 +179,7 @@ class SvgMapRenderer {
         this.home = { x: (minX + maxX) / 2 - (extraX / 2) * scale - w / 2, y: (minY + maxY) / 2 - (extraY / 2) * scale - h / 2, w, h };
         if (!this._userView || !this.view) this.view = { ...this.home };
         this._applyView();
+        this._updateZoom();
     }
 
     _pathD(points, close = false, projected = false) {
@@ -244,7 +250,7 @@ class SvgMapRenderer {
         }
         this.root?.remove();
         this.root = this.svg = this.scale = this.scaleLabel = this.baseGroup = this.routeGroup = this.incidentGroup = this.markerGroup = null;
-        this._routes = this._base = this._lastPoints = null;
+        this._routes = this._base = this._lastPoints = this._zoom = null;
     }
 
     _line(parent, xy, color, width, extra = {}) {
@@ -301,7 +307,7 @@ class SvgMapRenderer {
                 const marker = { fill: "none", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" };
                 SvgMapRenderer._el("path", { ...marker, d, stroke: "#fff", "stroke-width": 17 }, this.markerGroup);
                 const dot = SvgMapRenderer._el("path", { ...marker, d, stroke: color, "stroke-width": 13 }, this.markerGroup);
-                SvgMapRenderer._el("title", {}, dot).textContent = SvgMapRenderer._incidentLabel(inc);
+                SvgMapRenderer._el("title", {}, dot).textContent = MapRenderer._incidentLabel(inc);
             });
         });
 
@@ -309,16 +315,5 @@ class SvgMapRenderer {
         this._lastPoints = allXY;
         this._fit(this._lastPoints);
         this._requestBasemapFor(allLatLngs);
-    }
-
-    static _incidentLabel(inc) {
-        const mins = Math.round((inc.delaySeconds ?? 0) / 60);
-        const suffix = mins > 0 ? ` +${mins}m` : "";
-        switch (inc.category) {
-            case "ROAD_CLOSURE": return "Closure";
-            case "JAM": return `Jam${suffix}`;
-            case "ROAD_WORK": return `Roadwork${suffix}`;
-            default: return `Delay${suffix}`;
-        }
     }
 }
