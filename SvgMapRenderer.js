@@ -299,7 +299,7 @@ class SvgMapRenderer {
                 const seg = xy.slice(inc.startPointIndex, inc.endPointIndex + 1);
                 if (seg.length < 2) return;
                 const color = ColorTheme.getIncidentColor(inc.category, inc.magnitude);
-                const dash = inc.category === "ROAD_CLOSURE" ? "2 8" : inc.category === "ROAD_WORK" ? "10 6" : null;
+                const dash = ColorTheme.incidentDash[inc.category]?.replace(",", "") ?? null;
                 this._line(this.incidentGroup, seg, color, 7, dash ? { "stroke-dasharray": dash } : {});
                 if (!showMarkers) return;
                 const [x, y] = seg[Math.floor(seg.length / 2)];

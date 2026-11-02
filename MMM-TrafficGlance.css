@@ -280,9 +280,10 @@
     .tg-hero-spark:empty { display: none; }
     .sparkline-canvas { width: 100%; display: block; opacity: 0.95; }
     .tg-nowping { position: absolute; width: 7px; height: 7px; margin: -4px 0 0 -4px; border-radius: 50%; pointer-events: none; }
-    .tg-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-    .tg-chip { font-size: 12px; line-height: 18px; padding: 0 7px; border-radius: 10px; background: rgba(255,255,255,0.08); color: #ccc; white-space: nowrap; }
-    .tg-chip i { font-style: normal; margin-right: 4px; }
+    .tg-inc-list { margin-top: 5px; }
+    .tg-inc-track { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+    .tg-inc-item { display: flex; align-items: center; max-width: 100%; box-sizing: border-box; font-size: 12px; line-height: 18px; padding: 0 8px 0 5px; border-radius: 10px; background: rgba(255,255,255,0.08); color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tg-inc-item i { flex: none; width: 11px; margin-right: 4px; font-style: normal; text-align: left; }
     .tg-hero.tg-notice { border-color: rgba(245,166,35,0.6); background: rgba(40,26,0,0.72); }
     .tg-hero-title { font-size: 18px; color: var(--tg-warn); }
     .tg-hero-sub { font-size: 13px; color: var(--tg-dim); margin-top: 2px; }
@@ -381,6 +382,8 @@
         .tg-inc::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; background: inherit; animation: tg-ping 1.8s ease-out infinite; }
         .tg-nowping { animation: tg-ping 2.4s ease-out infinite; }
         .tg-hero-spark canvas { animation: tg-reveal 1.4s ease-out both; }
+        .tg-inc-scroll { height: 40px; overflow: hidden; }
+        .tg-inc-scroll .tg-inc-track { animation: tg-incscroll calc(var(--tg-n) * 4s + 6s) ease-in-out infinite alternate; }
     }
 }
 
@@ -389,6 +392,7 @@
 @keyframes tg-stripflow { to { background-position: 34px 0; } }
 @keyframes tg-dash { to { stroke-dashoffset: -14; } }
 @keyframes tg-ping { 0% { transform: scale(0.6); opacity: 0.8; } 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes tg-incscroll { 0%, 20% { transform: translateY(0); } 80%, 100% { transform: translateY(calc(var(--tg-n) * -22px)); } }
 @keyframes tg-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 .tg-svg-map {

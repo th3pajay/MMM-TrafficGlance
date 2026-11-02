@@ -1,7 +1,11 @@
 const NodeHelper = require("node_helper");
-const { resolvePacedIntervalMs } = require("./quotaPacing");
+const { resolvePacedIntervalMs, computePacedIntervalMs } = require("./quotaPacing");
 const configFile = require("./configFile");
 const basemapService = require("./basemapService");
+const incidentDetails = require("./incidentDetails");
+
+const INCIDENT_MIN_INTERVAL_MS = 600000;
+const INCIDENT_MAX_TTL_MS = 7200000;
 
 module.exports = NodeHelper.create({
     start() {
@@ -10,6 +14,8 @@ module.exports = NodeHelper.create({
         this._busy = false;
         this._lastCleanup = 0;
         this._recent = new Map();
+        this._incidentNext = 0;
+        this._incidentDetails = null;
     },
 
     stop() {
@@ -66,7 +72,7 @@ module.exports = NodeHelper.create({
         const polyline = r.legs?.flatMap(leg => leg.points) ?? [];
         const live = Math.round(s.travelTimeInSeconds / 60);
         const ntt = s.noTrafficTravelTimeInSeconds;
-        const along = this._cumulativeDistance(polyline);
+        const along = incidentDetails.cumulativeDistance(polyline);
         const total = along[along.length - 1] || 0;
         const positionOf = (a, b) => total > 0 ? ((along[a] ?? 0) + (along[b] ?? along[a] ?? 0)) / 2 / total : 0;
         const incidents = !api.incidents ? [] : (r.sections ?? [])
@@ -100,14 +106,53 @@ module.exports = NodeHelper.create({
         return { minutes: null, source: null };
     },
 
-    _cumulativeDistance(polyline) {
-        const out = [0];
-        for (let i = 1; i < polyline.length; i++) {
-            const a = polyline[i - 1], b = polyline[i];
-            const dx = (b.longitude - a.longitude) * Math.cos((a.latitude + b.latitude) * Math.PI / 360);
-            out.push(out[i - 1] + Math.hypot(dx, b.latitude - a.latitude));
+    _detailsEnabled() {
+        const api = this.config.api ?? {};
+        return Boolean(this.store && this.config.apiKey && api.incidents && api.incidentDetails && api.incidentMonthlyQuota > 0);
+    },
+
+    async _applyIncidentDetails(routes) {
+        if (!this._detailsEnabled() || !routes.length) return;
+        await this._refreshIncidentDetails(routes).catch(e =>
+            console.warn("[MMM-TrafficGlance] incident details failed:", e.message));
+        const cache = this._incidentDetails;
+        if (!cache || Date.now() - cache.at > cache.ttl) return;
+        for (const r of routes) r.incidents = incidentDetails.enrich(r.polyline, r.incidents, cache.items, this.config.api.incidentCategories);
+    },
+
+    async _refreshIncidentDetails(routes) {
+        if (Date.now() < this._incidentNext) return;
+        const api = this.config.api;
+        const boxes = incidentDetails.boxesFor(routes.map(r => r.polyline));
+        if (!boxes.length) return;
+        const items = [];
+        let complete = true;
+        for (const [i, bbox] of boxes.entries()) {
+            if (this.store.incidentCallsThisMonth() >= api.incidentMonthlyQuota) { complete = false; break; }
+            if (i > 0) await new Promise(res => setTimeout(res, 300));
+            this.store.recordIncidentCall();
+            try {
+                const res = await fetch(incidentDetails.requestUrl(this.config.apiKey, bbox), { signal: AbortSignal.timeout(api.timeout ?? 10000) });
+                if (res.status === 429) {
+                    const m = new Date(); m.setUTCHours(24, 0, 0, 0);
+                    this._incidentNext = m.getTime();
+                    throw new Error("rate limited");
+                }
+                if (!res.ok) throw new Error(res.statusText || String(res.status));
+                items.push(...incidentDetails.parse(await res.json()));
+            } catch (e) {
+                console.warn("[MMM-TrafficGlance] incident details unavailable:", e.message);
+                complete = false;
+                break;
+            }
         }
-        return out;
+        const now = Date.now();
+        const paced = Math.round(computePacedIntervalMs({
+            quota: api.incidentMonthlyQuota, callsThisMonth: this.store.incidentCallsThisMonth(now), routesCount: boxes.length,
+            now, configuredIntervalMs: INCIDENT_MIN_INTERVAL_MS
+        }));
+        this._incidentNext = Math.max(this._incidentNext, now + paced);
+        if (complete) this._incidentDetails = { items, at: now, ttl: Math.min(INCIDENT_MAX_TTL_MS, paced * 2) };
     },
 
     _trend(key, live) {
@@ -143,6 +188,7 @@ module.exports = NodeHelper.create({
                 });
                 if (data) routes.push(data);
             }
+            await this._applyIncidentDetails(routes);
             this.sendSocketNotification(routes.length ? "TRAFFIC_UPDATE" : "FETCH_ERROR",
                 routes.length ? routes : { category: "network" });
         } catch (e) {

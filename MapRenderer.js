@@ -1,4 +1,5 @@
 class MapRenderer {
+    static IDLE_HOME_MS = 60000;
     static OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
     static PROVIDERS = {
         osm: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, className: 'tg-osm-dark', attribution: MapRenderer.OSM_ATTRIBUTION },
@@ -12,12 +13,14 @@ class MapRenderer {
         this.map = L.map(containerId, {
             zoomControl: false,
             attributionControl: true,
-            dragging: false,
+            dragging: true,
             scrollWheelZoom: true,
             touchZoom: false,
             zoomSnap: 0.25
         });
         this._buildZoom();
+        this.map.on("dragstart", () => this._touched());
+        this.map.getContainer().addEventListener("wheel", () => this._touched(), { passive: true });
         this.routeLayer = L.layerGroup().addTo(this.map);
         const { url, ...tileOptions } = MapRenderer.PROVIDERS[this.config.map?.tileProvider] ?? MapRenderer.PROVIDERS.osm;
         this.tileLayer = L.tileLayer(url, {
@@ -90,10 +93,28 @@ class MapRenderer {
 
     zoomBy(delta) {
         if (!this.map) return;
+        this._touched();
         this.map.setZoom(this.map.getZoom() + delta);
     }
 
+    _touched() {
+        this._lastTouch = Date.now();
+        clearTimeout(this._homeTimer);
+        this._homeTimer = setTimeout(() => this._fitHome(), MapRenderer.IDLE_HOME_MS);
+    }
+
+    _fitHome() {
+        if (!this.map || !this._home) return;
+        this._lastTouch = 0;
+        const { bounds, pad, opts } = this._home;
+        this.map.fitBounds(bounds, opts.paddingTopLeft
+            ? { paddingTopLeft: opts.paddingTopLeft, paddingBottomRight: pad }
+            : { padding: pad });
+        this._updateZoom();
+    }
+
     destroy() {
+        clearTimeout(this._homeTimer);
         this._layers?.clear();
         this._zoom?.el.remove();
         this._zoom = null;
@@ -102,14 +123,7 @@ class MapRenderer {
     }
 
     static _incidentLabel(inc) {
-        const mins = Math.round((inc.delaySeconds ?? 0) / 60);
-        const suffix = mins > 0 ? ` +${mins}m` : "";
-        switch (inc.category) {
-            case "ROAD_CLOSURE": return "Closure";
-            case "JAM": return `Jam${suffix}`;
-            case "ROAD_WORK": return `Roadwork${suffix}`;
-            default: return `Delay${suffix}`;
-        }
+        return ColorTheme.incidentLabel(inc);
     }
 
     static _esc(text) {
@@ -143,7 +157,7 @@ class MapRenderer {
                 if (seg.length < 2) return;
                 L.polyline(seg, {
                     ...base, color: ColorTheme.getIncidentColor(s.category, s.magnitude), weight: hero ? 8 : 6, opacity: 1,
-                    dashArray: s.category === 'ROAD_CLOSURE' ? '2, 8' : s.category === 'ROAD_WORK' ? '10, 6' : null
+                    dashArray: ColorTheme.incidentDash[s.category] ?? null
                 }).addTo(this.routeLayer);
             });
 
@@ -174,9 +188,11 @@ class MapRenderer {
         const pad = this.config.map.padding || [20, 20];
         const bounds = L.latLngBounds(allPoints);
         this._homeZoom = this.map.getBoundsZoom(bounds, false, L.point(opts.paddingTopLeft ?? pad).add(L.point(pad)));
-        this.map.fitBounds(bounds, opts.paddingTopLeft
-            ? { paddingTopLeft: opts.paddingTopLeft, paddingBottomRight: pad }
-            : { padding: pad });
-        this._updateZoom();
+        this._home = { bounds, pad, opts };
+        if (this._lastTouch && Date.now() - this._lastTouch < MapRenderer.IDLE_HOME_MS) {
+            this._updateZoom();
+            return;
+        }
+        this._fitHome();
     }
 }

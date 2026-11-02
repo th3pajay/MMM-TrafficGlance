@@ -32,6 +32,7 @@ const SCHEMA = [
         options: [opt(true, "Straight"), opt("curved", "Curved"), opt("stepped", "Stepped"), opt(false, "Off")]
     }),
     field("incidents", "Display", "Incidents (none = off)", "incidents", { options: INCIDENT_CATEGORIES }),
+    field("incidentDetails", "Display", "Accident and cause details (extra API calls)", "boolean"),
     field("showDelta", "Display", "Show delta vs average", "boolean"),
     field("showTrend", "Display", "Show trend arrow", "boolean"),
     field("animations", "Display", "Animations", "boolean"),
