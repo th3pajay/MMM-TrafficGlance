@@ -1,8 +1,11 @@
 (function (root) {
     "use strict";
 
-    const INCIDENT_CATEGORIES = ["JAM", "ROAD_WORK", "ROAD_CLOSURE", "OTHER"];
-    const INCIDENT_SEVERITY = { ROAD_CLOSURE: 3, JAM: 2, ROAD_WORK: 1, OTHER: 0 };
+    const INCIDENT_CATEGORIES = [
+        "ROAD_CLOSURE", "ACCIDENT", "LANE_CLOSED", "BROKEN_DOWN_VEHICLE", "DANGEROUS_CONDITIONS", "FLOODING",
+        "ICE", "FOG", "RAIN", "WIND", "JAM", "ROAD_WORK", "OTHER"
+    ];
+    const INCIDENT_SEVERITY = Object.fromEntries(INCIDENT_CATEGORIES.map((c, i) => [c, INCIDENT_CATEGORIES.length - 1 - i]));
     const MAP_PRESETS = {
         leaflet: { renderer: "leaflet", tileProvider: "osm" },
         "leaflet-fr": { renderer: "leaflet", tileProvider: "osmfr" },
@@ -26,7 +29,8 @@
         },
         api: {
             adaptivePacing: true, monthlyQuota: 20000, timeout: 10000, routeType: "fastest", travelMode: "car",
-            traffic: true, avoid: [], incidents: true, incidentCategories: null
+            traffic: true, avoid: [], incidents: true, incidentCategories: null,
+            incidentDetails: false, incidentMonthlyQuota: 2500
         },
         sparkline: {
             enabled: true, width: 192, height: 48, showBaseline: true, showNowIndicator: true, showNowLabel: true,
@@ -84,6 +88,7 @@
             cfg.sparkline.lineStyle = raw.sparkline;
         }
         if (typeof raw.incidents === "boolean" || Array.isArray(raw.incidents)) setIncidents(cfg, raw.incidents);
+        if (typeof raw.incidentDetails === "boolean") cfg.api.incidentDetails = raw.incidentDetails;
         if (typeof raw.showDelta === "boolean") cfg.display.showDelta = raw.showDelta;
         if (typeof raw.showTrend === "boolean") cfg.display.showTrend = raw.showTrend;
         if (typeof raw.animations === "boolean") cfg.display.animations = raw.animations;
@@ -123,6 +128,7 @@
             mapHeight: px(m.height, 312),
             sparkline: s.enabled === false ? false : LINE_STYLES.includes(s.lineStyle) ? s.lineStyle : true,
             incidents: a.incidents ? (Array.isArray(a.incidentCategories) && a.incidentCategories.length ? a.incidentCategories : true) : false,
+            incidentDetails: a.incidentDetails === true,
             showDelta: cfg.display.showDelta !== false,
             showTrend: cfg.display.showTrend !== false,
             animations: cfg.display.animations !== false,

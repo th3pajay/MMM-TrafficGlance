@@ -3,7 +3,7 @@
 Real-time traffic for MagicMirror² with TomTom routing, historical sparklines and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.2.09-yellow)
+![Version](https://img.shields.io/badge/Version-1.2.12-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
@@ -67,7 +67,8 @@ Only `apiKey` and `routes` are required. Configs from earlier versions (nested `
 | `width` | `0` | Max module width in px. The map is hidden below 320 px |
 | `scale` | `1` | Size multiplier, 0.5 to 3 |
 | `sparkline` | `true` | `true`, `"curved"`, `"stepped"`, `false` |
-| `incidents` | `true` | `true`, `false`, or a list of `JAM`, `ROAD_WORK`, `ROAD_CLOSURE`, `OTHER` |
+| `incidents` | `true` | `true`, `false`, or a list of `ROAD_CLOSURE`, `ACCIDENT`, `LANE_CLOSED`, `BROKEN_DOWN_VEHICLE`, `DANGEROUS_CONDITIONS`, `FLOODING`, `ICE`, `FOG`, `RAIN`, `WIND`, `JAM`, `ROAD_WORK`, `OTHER`. TomTom routing only reports `JAM`, `ROAD_WORK`, `ROAD_CLOSURE` and `OTHER`; the rest need `incidentDetails` |
+| `incidentDetails` | `false` | Looks up the real cause of incidents near your routes (accident, lane closed, ice and so on). Uses TomTom's Incident Details API, which has its own allowance (see `api.incidentMonthlyQuota`) and needs `incidents` on |
 | `showDelta`, `showTrend`, `animations` | `true` | Toggle delta vs usual, trend arrow, motion |
 | `warnAt` / `criticalAt` | `10` / `25` | % slower than usual for yellow / red |
 
@@ -93,6 +94,7 @@ Put these inside `advanced`, e.g. `advanced: { api: { travelMode: "truck" }, map
 | `api.routeType` | `"fastest"` | `"fastest"`, `"shortest"`, `"eco"`, `"thrilling"` |
 | `api.travelMode` | `"car"` | `"car"`, `"truck"`, `"taxi"`, `"bus"`, `"pedestrian"`, `"bicycle"` |
 | `api.traffic` | `true` | Include live traffic |
+| `api.incidentMonthlyQuota` | `2500` | Incident Details calls per month, counted separately from `monthlyQuota`. Calls are one per area covering your routes, at least 10 minutes apart, and stretch automatically so the month never exceeds this. `0` turns `incidentDetails` off |
 | `api.avoid` | `[]` | `"tollRoads"`, `"motorways"`, `"ferries"`, `"unpavedRoads"`, `"carpools"`, `"alreadyUsedRoads"` |
 | `map.width` | `"100%"` | Container width |
 | `map.zoom` | `null` | Fixed zoom 1-19, or auto-fit |
@@ -113,7 +115,7 @@ Put these inside `advanced`, e.g. `advanced: { api: { travelMode: "truck" }, map
 
 Every poll is stored in `traffic.db` in the module folder. From it the module learns what is usual for each route per weekday and 15-minute slot: the median of the last 8 same weekdays. Once a slot has 3 weeks of samples, this own baseline drives the delta, the colours, the "usual" tick on the strip and the dashed "Usual" line in the sparkline. Until then TomTom's historic travel time is used.
 
-History is keyed on the route itself (origin, destination, travel mode, route type, avoid, traffic), so renaming a route keeps it and changing the route starts a fresh baseline. Raw polls are kept 7 days (or `lookbackHours`, if longer), baseline slots 8 weeks. Every TomTom request is counted for `monthlyQuota` pacing, failed ones included. Databases from earlier versions are migrated on first start.
+History is keyed on the route itself (origin, destination, travel mode, route type, avoid, traffic), so renaming a route keeps it and changing the route starts a fresh baseline. Raw polls are kept 7 days (or `lookbackHours`, if longer), baseline slots 8 weeks. Every TomTom request is counted for `monthlyQuota` pacing, failed ones included. Incident Details requests are counted in a separate table against `api.incidentMonthlyQuota`. Databases from earlier versions are migrated on first start.
 
 </details>
 

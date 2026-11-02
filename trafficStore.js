@@ -52,6 +52,7 @@ function createSchema(db) {
             max_delay INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_incidents_route_seen ON incidents(route_key, last_seen);
         CREATE TABLE IF NOT EXISTS api_calls(day INTEGER PRIMARY KEY, n INTEGER NOT NULL) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS incident_calls(day INTEGER PRIMARY KEY, n INTEGER NOT NULL) WITHOUT ROWID;
     `);
 }
 
@@ -87,6 +88,9 @@ class TrafficStore {
             countCall: q("INSERT INTO api_calls(day, n) VALUES(?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1"),
             addCalls: q("INSERT INTO api_calls(day, n) VALUES(?, ?) ON CONFLICT(day) DO UPDATE SET n = n + excluded.n"),
             callsSince: q("SELECT COALESCE(SUM(n), 0) n FROM api_calls WHERE day >= ?"),
+            countIncidentCall: q("INSERT INTO incident_calls(day, n) VALUES(?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1"),
+            incidentCallsSince: q("SELECT COALESCE(SUM(n), 0) n FROM incident_calls WHERE day >= ?"),
+            pruneIncidentCalls: q("DELETE FROM incident_calls WHERE day < ?"),
             pruneSamples: q("DELETE FROM samples WHERE ts < ?"),
             pruneIncidents: q("DELETE FROM incidents WHERE last_seen < ?"),
             pruneSlots: q("DELETE FROM slot_daily WHERE day < ?"),
@@ -105,6 +109,15 @@ class TrafficStore {
     callsThisMonth(nowMs = Date.now()) {
         const d = new Date(nowMs);
         return this._q.callsSince.get(d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + 1).n;
+    }
+
+    recordIncidentCall(ts = nowSec()) {
+        this._q.countIncidentCall.run(utcDayKey(new Date(ts * 1000)));
+    }
+
+    incidentCallsThisMonth(nowMs = Date.now()) {
+        const d = new Date(nowMs);
+        return this._q.incidentCallsSince.get(d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + 1).n;
     }
 
     record(key, travelTime, incidents = [], ts = nowSec()) {
@@ -161,7 +174,9 @@ class TrafficStore {
             this._q.pruneSamples.run(rawCutoff);
             this._q.pruneIncidents.run(rawCutoff);
             this._q.pruneSlots.run(localDayKey(new Date((now - SLOT_RETENTION_SEC) * 1000)));
-            this._q.pruneCalls.run(utcDayKey(new Date((now - CALL_RETENTION_SEC) * 1000)));
+            const callCutoff = utcDayKey(new Date((now - CALL_RETENTION_SEC) * 1000));
+            this._q.pruneCalls.run(callCutoff);
+            this._q.pruneIncidentCalls.run(callCutoff);
         });
     }
 

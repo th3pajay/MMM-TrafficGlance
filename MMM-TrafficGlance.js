@@ -162,14 +162,7 @@ Module.register("MMM-TrafficGlance", {
     },
 
     _incidentLabel(incident) {
-        const mins = Math.round((incident.delaySeconds ?? 0) / 60);
-        const suffix = mins > 0 ? ` +${mins}m` : "";
-        switch (incident.category) {
-            case "ROAD_CLOSURE": return "Closure";
-            case "JAM": return `Jam${suffix}`;
-            case "ROAD_WORK": return `Roadwork${suffix}`;
-            default: return `Delay${suffix}`;
-        }
+        return ColorTheme.incidentLabel(incident);
     },
 
     _incidents(r) {
@@ -179,6 +172,16 @@ Module.register("MMM-TrafficGlance", {
             (severity[b.category] ?? 0) - (severity[a.category] ?? 0)
             || (b.magnitude ?? 0) - (a.magnitude ?? 0)
             || (b.delaySeconds ?? 0) - (a.delaySeconds ?? 0));
+    },
+
+    _incidentGroups(r) {
+        const groups = new Map();
+        for (const inc of this._incidents(r)) {
+            const g = groups.get(inc.category);
+            if (g) g.count += inc.count ?? 1;
+            else groups.set(inc.category, { ...inc, count: inc.count ?? 1 });
+        }
+        return [...groups.values()];
     },
 
     _glyph(inc) {
@@ -199,14 +202,14 @@ Module.register("MMM-TrafficGlance", {
             el.innerHTML = `<span class="tg-sk tg-sk-name"></span><span class="tg-sk tg-sk-num"></span><span class="tg-sk tg-sk-spark"></span><div class="tg-hero-sub">${msg}</div>`;
             return;
         }
-        const r = hero.route, sorted = this._incidents(r), shown = sorted.slice(0, 3);
+        const r = hero.route, sorted = this._incidentGroups(r), overflow = Math.max(0, sorted.length - 2);
         const meta = [`arr ${this._arrival(r)}`, r.distanceKm ? `${r.distanceKm} km` : ""].filter(Boolean).join(" · ");
         const delta = this._deltaText(r);
         el.className = `tg-hero tg-${this._cc(r)}`;
         el.innerHTML = `<div class="tg-hero-head"><span class="tg-hero-name"></span><span class="tg-hero-why"></span></div>`
             + `<div class="tg-hero-main">${this._numHtml(r, "tg-hero-num")}<div class="tg-hero-meta">${delta ? `<span class="tg-delta">${delta} min</span> ` : ""}${this._trendHtml(r)}<small>${meta}</small></div></div>`
             + '<div class="tg-hero-spark"></div>'
-            + (shown.length ? `<div class="tg-chips">${shown.map(i => `<span class="tg-chip"><i style="color:${ColorTheme.getIncidentColor(i.category, i.magnitude)}">${this._glyph(i)}</i>${this._incidentLabel(i)}</span>`).join("")}${sorted.length > shown.length ? `<span class="tg-chip">+${sorted.length - shown.length}</span>` : ""}</div>` : "");
+            + (sorted.length ? `<div class="tg-inc-list${overflow ? " tg-inc-scroll" : ""}" style="--tg-n:${overflow}"><div class="tg-inc-track">${sorted.map(i => `<span class="tg-inc-item"><i style="color:${ColorTheme.getIncidentColor(i.category, i.magnitude)}">${this._glyph(i)}</i>${this._incidentLabel(i)}</span>`).join("")}</div></div>` : "");
         el.querySelector(".tg-hero-name").textContent = r.name;
         el.querySelector(".tg-hero-why").textContent = hero.label;
         this._heroSpark(r, el.querySelector(".tg-hero-spark"));
