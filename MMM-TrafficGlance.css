@@ -431,3 +431,7 @@
 .tg-osm-dark {
     filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
 }
+
+#traffic-map-container .leaflet-tile {
+    mix-blend-mode: normal;
+}
