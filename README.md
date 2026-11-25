@@ -3,7 +3,7 @@
 Real-time traffic for MagicMirror² with TomTom routing, historical sparklines and a live route map.
 
 ![MagicMirror](https://img.shields.io/badge/MagicMirror-v2.33.0-blue)
-![Version](https://img.shields.io/badge/Version-1.2.12-yellow)
+![Version](https://img.shields.io/badge/Version-1.2.13-yellow)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ![Node](https://img.shields.io/badge/Node-%3E%3D22.5-green)
 
